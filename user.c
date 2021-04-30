@@ -57,7 +57,7 @@ int main(int argc, char * argv[]){
 
     bufS.mtype = mID;
     strcpy(bufS.mtext, "Test: User -> Oss");
-    if( msgsnd(shmidMsgRec, &bufI, sizeof(bufI.mtext), 0) == -1 ){
+    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
 
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }

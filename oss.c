@@ -112,15 +112,18 @@ int main(int argc, char * argv[]){
         }
 
         //Check for Messages by terminated Procesess
-        if(msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, IPC_NOWAIT) == -1){
+        if(msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
 
             perrorHandler("Master: ERROR: Failed to Receive Message from User ");
         }
+		
+		if(debug == true ){
 
-        //Print Received Message
-        fprintf(stdout, "%s \n", bufR.mtext);
-
-        //check for Finished Processes
+        	//Print Received Message
+			fprintf(stderr, "Master: DEGUB: Message Received: %s \n", bufR.mtext);
+		}
+        
+		//check for Finished Processes
         int status;
         pid_t user_id = waitpid(-1, &status, WNOHANG);
 
