@@ -5,7 +5,6 @@
  * File Name: user.c
  */
 
-#include "oss.h"
 #include "user.h"
 #include "shared.h"
 #include "headers.h"
@@ -27,6 +26,11 @@ int main(int argc, char * argv[]){
     setSemID(shmidSem);
     setShmid(sys);
     mID = idx+1;
+    run = true;
+    references = 0;
+    randRef = getRand(900, 1100);
+    //Initialize pTable[Frames]
+
 
     if(sys->debug == true){
         fprintf(stderr, "User[%d]: DEBUG: Initializing - Time: %s\n", idx, getSysTime());
@@ -34,25 +38,15 @@ int main(int argc, char * argv[]){
 
     //Initialize Messaging
     bufI.mtype = mID;
-    strcpy(bufI.mtext, "");
+    strcpy(bufI.mtext, "Initialized");
 
+    //Signal to OSS that User has Initialized
     if( msgsnd(shmidMsgInit, &bufI, sizeof(bufI.mtext), 0) == -1 ){
-
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
     if(sys->debug == true){
         fprintf(stderr, "User[%d]: DEBUG: Initialized - Time: %s\n", idx, getSysTime());
-    }
-
-    //Validate Receive Message
-    if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
-
-        perrorHandler("User: ERROR: Failed to Receive Message from OSS ");
-    }
-
-    if(sys->debug == true){
-        fprintf(stderr, "User[%d]: DEBUG: Message Received from OSS Msg: %s", idx, bufR.mtext);
     }
 
     bufS.mtype = mID;
@@ -62,11 +56,119 @@ int main(int argc, char * argv[]){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
+    while(run == true){
+
+        //MOVE INTO FUNCTION LISTEN FOR TERMINATE
+        if(checkTermMsg()){
+            run = false;
+            break;
+        }
+
+        //Check if User Should Self Terminate
+        if(checkTermPct()){
+            run = false;
+            break;
+        }
+
+        //Request Read/Write
+        pageRequest();
+    }
+
+    if(sys->debug == true){
+        fprintf(stderr, "User: DEBUG: P%d Terminating Time: %s", idx, getSysTime());
+    }
+
     //Free Memory
     freeSHM();
 
     exit(EXIT_SUCCESS);
 
+}
+
+//Generate Memory Request for Read/Write
+static void pageRequest(){
+
+    //Iterate Memory Refs
+    ++references;
+    ++referenceIter;
+
+    //Choose Random Page from Table to Request
+    bufS.page = getRand(0,31);
+    //~2.4% Chance for bad memory Reference
+    bufS.offset = getRand(-10, 1035);
+    //Request Address to Access, Chance for Invalid Request
+    bufS.address = bufS.page*1024 + bufS.offset;
+
+    sys->pTable[idx].frameIdx = bufS.page;
+
+    //Randomly Choose Read/Write Based On Read/Write %
+    if(getRand(0,100) < readPct){
+        bufS.action = READ;
+        strcpy(bufS.mtext, "Read Access Request");
+    }
+    else {
+        bufS.action = WRITE;
+        strcpy(bufS.mtext, "Write Access Request");
+    }
+    bufS.mtype = mID;
+
+    if(sys->debug == true){
+        fprintf(stderr, "User: DEBUG: P%d -> %s\n", idx, bufS.mtext);
+    }
+
+    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
+        perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
+    }
+
+    //Validate Receive Message
+    if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
+
+        perrorHandler("User: ERROR: Failed to Receive Message from OSS ");
+    }
+
+    if( bufR.action == TERMINATE ){ run = false; }
+}
+
+//Check if User Should Self Terminate
+static bool checkTermPct(){
+
+    //If random Ref between 900-1100 Ref Check for term
+    if(referenceIter % randRef == 0){
+
+        int t = getRand(0,2);
+        referenceIter = 0;
+
+        //33% Chance Terminate
+        if(t != 0) { return false; }
+
+        else { //If Terminate Inform OSS
+            bufS.action = TERMINATE;
+            strcpy(bufS.mtext, "Terminate");
+            if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
+                perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//Check message for terminate
+static bool checkTermMsg(){
+
+    //Validate Receive Message
+    if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, IPC_NOWAIT) == -1){
+
+        perrorHandler("User: ERROR: Failed to Receive Message from OSS ");
+    }
+
+    if(sys->debug == true){
+        fprintf(stderr, "User[%d]: DEBUG: Message Received from OSS Msg: %s", idx, bufR.mtext);
+    }
+
+    if( bufR.mtext == "terminate") { return true; }
+    else { return false; }
 }
 
 //Initialize Shared Memory for System Time

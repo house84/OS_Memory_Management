@@ -26,6 +26,7 @@ int main(int argc, char * argv[]){
     strcpy(logfile, "logfile");
 
     totalProc = 0;
+    allocatedFrames = 0;
     srand(time(NULL));
 
     //Parse Input Args
@@ -64,14 +65,14 @@ int main(int argc, char * argv[]){
     tm = localtime(&now);
     int startSeconds = tm->tm_sec;
     bool go = true;
-    bool stopSpawn = false;
+    bool terminateTimer = false;
 
     //while(true){
     int i;
     for(i = 0; i < maxConProc; ++i){
 
         //Check Timer
-        if(stopSpawn == false){
+        if(terminateTimer == false){
 
             now = time(0);
             tm = localtime(&now);
@@ -79,56 +80,67 @@ int main(int argc, char * argv[]){
 
             //Set Run Timer
             if((stopSeconds - startSeconds) >= 10){
-                stopSpawn = true;
+                terminateTimer = true;
             }
         }
 
-        //Increment System Time by 1-500 ms
-
         //critical
         semWait(mutex);
-        incrementSysTime(rand()%500000000 + 1000001);
+        //Increment Sys Time by 1-500 ms
+        incrementSysTime(rand()%500000001 + 1000000);
         semSignal(mutex);
 
-        if( concProc < maxConProc && totalProc < maxProc && stopSpawn == false ){
+        if( concProc < maxConProc ){
 
             //do some spawning
+            //Add bit Vector to get free Index
             spawn(i);
             mID = i+1;
+            active[i] = true;           //Track Active Processes
             ++totalProc;                //Track Total Processes
             ++concProc;                 //Track Concurrent Processes
 
+            //Allow User Process to Initialize
             if(msgrcv(shmidMsgInit, &bufI, sizeof(bufI.mtext), mID, 0) == -1){
 
                 perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
             }
         }
 
-        bufS.mtype = mID;
-        strcpy(bufS.mtext, "Test: Oss -> User");
-        if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+        //Handle User Memory Request
+        memoryHandler();
 
-            perrorHandler("Master: ERROR: Failed to Send Message to User ");
-        }
+        //Check fault Queue
+        checkFaultQ();
 
-        //Check for Messages by terminated Procesess
-        if(msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
-
-            perrorHandler("Master: ERROR: Failed to Receive Message from User ");
-        }
-		
-		if(debug == true ){
-
-        	//Print Received Message
-			fprintf(stderr, "Master: DEGUB: Message Received: %s \n", bufR.mtext);
-		}
-        
 		//check for Finished Processes
         int status;
         pid_t user_id = waitpid(-1, &status, WNOHANG);
 
         if(user_id > 0 ){
             --concProc;
+        }
+
+        //Check if OSS should terminate
+        if(totalProc > maxProc || terminateTimer == false){
+
+            int j;
+            //Send Message to Users to Terminate
+            for(j = 0; j < maxConProc; ++j ){
+
+                //Iterate through Active Processes
+                if( active[j] == true ){
+
+                    bufS.mtype = j+1;
+                    bufS.action = TERMINATE;
+                    strcpy(bufS.mtext, "terminate");
+                    if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+                        perrorHandler("Master: ERROR: Failed to Send Message to User ");
+                    }
+                }
+            }
+
+            break;
         }
     }
 
@@ -147,6 +159,220 @@ int main(int argc, char * argv[]){
     }
 
     return 0;
+}
+
+//page Handler
+static void memoryHandler(){
+
+    //call
+    specialDaemon();
+
+    int idx;
+    bool invalidAddr = false;
+
+    //ADD LOGIC TO HANDLE USERS MESSAGES TO REQUEST MEMORY READ
+     bufR.mtype =-1;
+     if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, IPC_NOWAIT) == -1){
+           perrorHandler("Master: ERROR: Failed to Receive Message msgrcv() ");
+     }
+
+     //If User Message Received
+     if(bufR.mtype != -1){
+
+         idx = bufR.mtype - 1;
+         int pageMinAddr = bufR.page*1024;             //p0 = Addressable from 0
+         int pageMaxAddr = ((bufR.page+1)*1024) - 1;   //p0 = Addressable to 1023
+         int page = bufR.page;
+
+         //+++for Testing To Terminate
+         //bufR.address = -1;
+         //++++++
+
+         //Check if Address is invalid, then terminate
+         if( bufR.address < pageMinAddr || bufR.address > pageMaxAddr ){
+
+             //Invalid Address Terminate User Process
+             bufS.mtype = bufR.mtype;
+             bufS.action = TERMINATE;
+             strcpy(bufS.mtext, "terminate");
+             if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
+             }
+
+             active[idx] = false;
+             //Look at sys->PCB[userIdx]->
+             //     Free Bit Index Array User Indexes Needs Freed
+             //     Free Memory from 256k Bit Array
+             //     User pageTable = Free all allocated space from 256k array
+             //     Remove page from  frameQueue
+
+             fprintf(stdout, "Master: P%d Requested Invalid Memory, Terminating. Time: %s", idx, getSysTime());
+
+             return;
+         }
+
+         //check if frame has been allocated System memory
+         if( sys->pTable[idx].pageT[page].allocated ) {
+
+             //set valid bit = true, refBit or dirtyBit depending on Read/Write
+             //bufR.page
+             //Return message to User to continue
+             return;
+         }
+
+         //search memory bit vector for space in OSS
+         int memIdx = getMemoryBit();
+         if(memIdx >= 0){
+
+             //Allocate Memory
+             sys->pTable[idx].pageT[page].frameIdx = memIdx;
+             setMemoryBit(memIdx);
+         }
+          else{
+
+             //Second Chance Find replacement and allocate
+             memIdx = fifo();
+
+             //Allocate Memory
+             sys->pTable[idx].pageT[page].frameIdx = memIdx;
+             setMemoryBit(memIdx);
+          }
+
+          ++allocatedFrames;
+
+          //set time
+          sys->pTable[idx].pageT[page].time = getTime();
+
+          //Set allocated = true; in User Frame
+          sys->pTable[idx].pageT[page].allocated = true;
+
+          //Set ValidBit
+          sys->pTable[idx].pageT[page].validBit = true;
+
+          //set faultQRemove to 14ms past current time
+          sys->pTable[idx].pageT[page].faultQRemove = getTime() + .014;
+
+          if( bufR.action == READ ){
+
+              sys->pTable[idx].pageT[page].refByte = true;
+          }
+          else {
+
+              sys->pTable[idx].pageT[page].dirtyBit = true;
+          }
+
+          //++++++++++++ NEED TO ADD THESE FUNCTIONS
+          //Add to frameQueue
+          //PAGE FAULT -> add to faultQueue
+     }
+}
+
+//Make circular Queue for frames for FIFO and Daemon routine
+//
+//  frameQ
+//
+//
+//
+//
+
+//Find Available Memory Bit
+static int getMemoryBit(){
+    int idx;
+
+    //search for Index
+
+    return idx;
+}
+
+//Set Bit for Allocated Page in Sys Memory
+static void setMemoryBit(int idx){
+
+}
+
+//Unset Bit from Memory Vector
+static void unsetMemoryBit(int idx){
+
+}
+
+//Find Available User Idx
+static int getUserIdxBit(){
+    int idx;
+
+    return idx;
+}
+
+
+//Set Bit for User Process Idx
+static void setUserIdxBit(int idx) {
+
+}
+
+//Unset Bit from User Vector
+static void unsetUserIdxBit(int idx){
+
+}
+
+
+static void specialDaemon(){
+
+    //when free frames from memory < 25
+    //Create int to allocatedFrameTotal
+
+    //search frameQueue for oldest/first 5% of allocatedFrameTotal
+    //Set validBit = false, if false free that memory location;
+    //
+    //Free page from system Memory 256k Bit Array
+    //Reset user frame to default
+    //Remove page from Circular Queue
+}
+
+static int fifo(){
+    int index;
+
+    //do FIFO stuff
+
+    return index;
+}
+
+static void checkFaultQ(){
+
+    //faultQueue that is circular
+    //Check if designated 14ms has passed
+    //if So Fault Handler
+    //pass idx to faultHandler(idx);
+}
+
+//FIFO Page Fault
+static void faultHandler(int idx){
+
+    //Check Head of faultQ
+    //If 14ms passed from head
+    //while( faultQ->Head
+    //  msgsnd(user -> );
+
+}
+
+//Check User Message
+static void checkMsg(){
+
+    //Check for Messages by terminated Procesess
+    if(msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, 0) == -1){
+
+        perrorHandler("Master: ERROR: Failed to Receive Message from User ");
+    }
+
+    if(debug == true ){
+
+        //Print Received Message
+        fprintf(stderr, "Master: DEBUG: Message Received: %s \n", bufR.mtext);
+    }
+
+    if( bufR.mtext == "terminate"){
+
+        active[bufR.mtype-1] = false;
+        fprintf(logPtr, "Master: P%ld Terminating\n", bufR.mtype + 1);
+        fprintf(stdout, "Master: P%ld Terminating\n", bufR.mtype + 1);
+    }
 }
 
 
@@ -403,6 +629,5 @@ static void spawn(int idx){
         }
 
         exit(EXIT_SUCCESS);
-
     }
 }

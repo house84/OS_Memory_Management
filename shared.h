@@ -24,12 +24,19 @@
 #define BIT_CHECK(a, b) (!!((a) & (1ULL << (b))))
 
 enum sems{mutex};
+enum actions{READ, WRITE, VALID, TERMINATE};
+
 
 //Message Buffer
 struct{
 
     long mtype;
     char mtext[bufLength];
+    int action;               //READ(0) WRITE(1) TERMINATE(2)
+    int page;                 //Index Within Page Table
+    int offset;               //Page Offset
+    int address;              //Address For Read/Write
+
 } bufI, bufS, bufR;
 //Init,  Send,  Receive
 
@@ -42,11 +49,13 @@ int shmidSem;
 
 typedef struct{
 
-    int delimeter;
-    int frameNum;
-    bool refBit;
-    bool validBit;
-    bool dirtyBit;
+    int frameIdx;           //Frame Idx for System Bit Array
+    float time;             //Time Allocated to Memory
+    float faultQRemove;     //Time added to faultQ
+    bool allocated;         //Frame has been allocated
+    bool refByte;           //FIFO Second Look Algo
+    bool validBit;          //OSS Checks if Address is Valid
+    bool dirtyBit;          //Been Written To not sent swapped
 } frame;
 
 typedef struct{
@@ -54,17 +63,30 @@ typedef struct{
     int mID;
     int idx;
     pid_t pid;
+    int delimeter;
+    int frameIdx;
     frame pageT[pTableSize];
 } pcb;
 
+typedef struct{
+
+    int memAPS;              //Number of memory accesses per second
+    float faultsPMA;         //Number of page faults per memory access
+    float AvgMAS;            //Average Memory Access Speed
+    int segFPMA;             //Number of Seg Faults Per memory Access
+} statistics;
+
 struct system{
 
-    int seconds;
-    int nanoSeconds;
-    int fileLength;
+    unsigned int seconds;
+    unsigned int nanoSeconds;
+    unsigned int fileLength;
     bool debug;
+    statistics stats;
     pcb pTable[maxConProc];
 };
+
+
 
 struct system *sys;
 FILE * logPtr;

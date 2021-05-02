@@ -7,6 +7,7 @@
 
 #ifndef SHAREDFUNC_H
 #define SHAREDFUNC_H
+#include "headers.h"
 
 void setShmid();
 void setSemID();
