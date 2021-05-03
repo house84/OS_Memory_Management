@@ -12,6 +12,8 @@
 #include "shared.h"
 #include "Q.h"
 
+//enum actions{READ, WRITE, VALID, TERMINATE}; 
+
 bool debug;
 bool spawnFlag;                        //Varialbe to signal forking process
 bool sigFlag;                          //Signal Termination Has been init

@@ -10,9 +10,13 @@
 #include "headers.h"
 #include "sharedFunc.h"
 
+static void sighub(); 
+
 int main(int argc, char * argv[]){
 
     srand(time(NULL) ^ (getpid()<<16));
+
+	signal(SIGQUIT, sighup); 
 
     //Set Shmids
     idx = atoi(argv[1]);                //Set Index
@@ -56,20 +60,27 @@ int main(int argc, char * argv[]){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
-    while(run == true || sys->run == true){
+    while(run == true){ // && sys->run == true){
 
         //MOVE INTO FUNCTION LISTEN FOR TERMINATE
-        if(checkTermMsg()){ break; }
+      //  if(checkTermMsg()){ break; }
 
         //Check if User Should Self Terminate
-        if(checkTermPct()){ break; }
+        if(checkTermPct()){ 
+			
+			if(sys->debug == true){
+				fprintf(stderr, "User: P%d DEBUG: Check Terminate True \n", idx);
+			}
+			run = false; 
+			break; 
+		}
 
         //Request Read/Write
         pageRequest();
     }
 
     if(sys->debug == true){
-        fprintf(stderr, "User: DEBUG: P%d Terminating Time: %s", idx, getSysTime());
+        fprintf(stderr, "User: DEBUG: P%d Terminating Time: %s\n", idx, getSysTime());
     }
 
     //Free Memory
@@ -87,23 +98,31 @@ static void pageRequest(){
     ++referenceIter;
 
     //Choose Random Page from Table to Request
-    bufS.page = getRand(0,31);
-    //~2.4% Chance for bad memory Reference
-    bufS.offset = getRand(-10, 1035);
+    int page = getRand(0,31); 
+	sys->pTable[idx].pageT[page].offset = getRand(-10, 1035); 
+    bufS.page = page; 
+	//~2.4% Chance for bad memory Reference
+    int offset = getRand(-10, 1035); 
+//	bufS.offset = offset; 
     //Request Address to Access, Chance for Invalid Request
-    bufS.address = bufS.page*1024 + bufS.offset;
+    int address = page*1024 + offset; 
+//	bufS.address = address;
+	sys->pTable[idx].pageT[page].address = address; 
+//	bufS.address = -1; 
 
     sys->pTable[idx].frameIdx = bufS.page;
 
     //Randomly Choose Read/Write Based On Read/Write %
     if(getRand(0,100) < readPct){
-        bufS.action = READ;
-        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
+       // bufS.action = READ;
+        sys->pTable[idx].pageT[page].actionNum = READ; 
+		strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
         strcpy(bufS.mtext, "Read Access Request");
     }
     else {
-        bufS.action = WRITE;
-        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
+        //bufS.action = WRITE;
+        sys->pTable[idx].pageT[page].actionNum = WRITE; 
+		strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
         strcpy(bufS.mtext, "Write Access Request");
     }
     bufS.mtype = mID;
@@ -112,7 +131,8 @@ static void pageRequest(){
         fprintf(stderr, "User: DEBUG: P%d -> %s\n", idx, bufS.mtext);
     }
 
-    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1 ){
+    //if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1 ){
+    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
@@ -122,7 +142,13 @@ static void pageRequest(){
         perrorHandler("User: ERROR: Failed to Receive Message from OSS ");
     }
 
-    if( bufR.action == TERMINATE ){ run = false; }
+	if( strcmp(bufR.mtext, "terminate") == 0 ){ run = false; }
+
+	if(sys->debug == true ){
+
+		fprintf(stderr, "User: DEBUG: Address: %d Run: %d Message Received %s\n",sys->pTable[idx].pageT[page].address, run, bufR.mtext);
+	}
+
 }
 
 //Check if User Should Self Terminate
@@ -138,8 +164,14 @@ static bool checkTermPct(){
         if(t != 0) { return false; }
 
         else { //If Terminate Inform OSS
-            bufS.action = TERMINATE;
-            strcpy(bufS.mtext, "Terminate");
+            
+			if(sys->debug == true){
+
+				fprintf(stderr, "User: DEBUG: P%d CheckTerminate = True\n", idx);
+			}
+
+			bufS.action = TERMINATE;
+            strcpy(bufS.mtext, "terminate");
             if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
                 perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
             }
@@ -182,3 +214,16 @@ static void freeSHM(){
         exit(EXIT_FAILURE);
     }
 }
+
+
+void sighup(){
+
+	fprintf(stderr, " SIGHUP Terminating P%d \n", idx);
+	
+	if(shmdt(sys) == -1){
+		perrorHandler("User: ERROR: Failed to free ptr shmdt() "); 
+	}
+
+	exit(EXIT_SUCCESS); 
+}
+	

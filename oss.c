@@ -10,6 +10,7 @@
 #include "headers.h"
 #include "sharedFunc.h"
 
+
 int main(int argc, char * argv[]){
 
     //Set Bool
@@ -71,9 +72,9 @@ int main(int argc, char * argv[]){
     bool go = true;
     bool terminateTimer = false;
 
-    //while(true){
-    int i;
-    for(i = 0; i < maxConProc; ++i){
+    while(true){
+  //  int i;
+   // for(i = 0; i < maxConProc; ++i){
 
         //Check Timer
         if(terminateTimer == false){
@@ -94,7 +95,8 @@ int main(int argc, char * argv[]){
         incrementSysTime(rand()%500000001 + 1000000);
         semSignal(mutex);
 
-        if( concProc < maxConProc ){
+        //if( concProc < maxConProc ){
+        if( concProc < 1 ){
 
             //do some spawning
             int idx = getUserIdxBit();
@@ -125,44 +127,55 @@ int main(int argc, char * argv[]){
         }
 
         //Check if OSS should terminate
-        if(totalProc > maxProc || terminateTimer == false){
+        if(totalProc > maxProc || terminateTimer == true){
 
-            sys->run = false;
+           if(debug == true){
 
-            int j;
+			   fprintf(stderr, "Master: Ending Loop: Total Proc = %d  Timer%d\n", totalProc, terminateTimer); 
+		   }
+		   sys->run = false;
+
+          // kill(0 ,SIGQUIT); 
+		  
+		 // wait(NULL); 
+		 //  	int j;
             //Send Message to Users to Terminate
-            for(j = 0; j < maxConProc; ++j ){
+         //   for(j = 0; j < maxConProc; ++j ){
 
                 //Iterate through Active Processes
-                if( active[j] == true ){
+           //     if( active[j] == true ){
 
                     //Allow any user waiting on MsgSnd to continue
-                    if(msgrcv(shmidMsgInit, &bufR, sizeof(bufR.mtext), mID, IPC_NOWAIT) == -1){
-                        perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
-                    }
+             //       if(msgrcv(shmidMsgInit, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
+              //          perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
+               //     }
 
-                    bufS.mtype = j+1;
-                    bufS.action = TERMINATE;
-                    strcpy(bufS.mtext, "terminate");
-                    if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1){
-                        perrorHandler("Master: ERROR: Failed to Send Message to User ");
-                    }
-                }
-            }
+                 //   bufS.mtype = j+1;
+                  //  bufS.action = TERMINATE;
+                  //  strcpy(bufS.mtext, "terminate");
+                   // if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+                    //    perrorHandler("Master: ERROR: Failed to Send Message to User ");
+                    //}
+                	
+				//}
+           // }
+	
 
             break;
         }
     }
 
     if(debug == true){
-        fprintf(stderr, "Master: DEBUG: Driver Loop Exited Total Processes: %d - Time: %s\n", totalProc, getSysTime());
+        fprintf(stderr, "Master: DEBUG: Driver Loop Exited Total Processes: %d  Time: %s\n", totalProc, getSysTime());
     }
+
+	signalHandler(0); 
 
     //Allow Processes to finish
     while(wait(NULL) > 0){}
 
     //Clean up Resources
-    signalHandler(3126);
+//    signalHandler(3126);
 
     if(debug == true){
         fprintf(stderr, "Master: DEBUG: Resources Free Exiting Program\n");
@@ -182,7 +195,8 @@ static void memoryHandler(){
 
     //ADD LOGIC TO HANDLE USERS MESSAGES TO REQUEST MEMORY READ
      bufR.mtype =-1;
-     if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, IPC_NOWAIT) == -1){
+     //if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, IPC_NOWAIT) == -1){
+     if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, 0) == -1){
            perrorHandler("Master: ERROR: Failed to Receive Message msgrcv() ");
      }
 
@@ -196,19 +210,30 @@ static void memoryHandler(){
          bool invalid = false;
          bool terminate = false;
 
+		 if( debug == true){
+			 fprintf(stderr, "Master: DEBUG: MemoryHandler() Address: %d P%d  Action: %d Message: %s\n", bufR.address, idx, bufR.action, bufR.mtext); 
+		 }
+
          //+++for Testing To Terminate
-         bufR.address = -1;
+        // bufR.address = -1;
          //++++++
 
          //Check if Address is invalid, then terminate
-         if( bufR.action == TERMINATE ){
+         if( strcmp(bufR.mtext, "terminate") == 0){
 
-             freeUserResources(idx, page);
+			fprintf(stderr, "In Terminate\n"); 
+
+             invalid = true;
+            	
+			 wait(NULL); 
+			 --concProc; 
+
+			 freeUserResources(idx, page);
              return;
          }
          else if( bufR.address < pageMinAddr || bufR.address > pageMaxAddr ) {
 
-             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s", bufR.address, getSysTime());
+             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s\n", idx, bufS.address, getSysTime());
 
              invalid = true;
              //Invalid Address Terminate User Process
@@ -219,7 +244,10 @@ static void memoryHandler(){
                  perrorHandler("Master: ERROR: Failed to Send Message to User ");
              }
 
-             freeUserResources(idx, page);
+			 wait(NULL); 
+			 --concProc; 
+             
+			 freeUserResources(idx, page);
              return;
          }
 
@@ -302,8 +330,12 @@ static void memoryHandler(){
 //Free A User's Resources from system when Terminating
 static void freeUserResources(int idx, int page){
 
-    //Look at sys->PCB[userIdx]->
-    int i;
+    if( debug == true){
+
+		fprintf(stderr, "Master: DEBUG: P%d Freeing Resources\n"); 
+	}
+	
+	int i;
     for (i = 0; i < 32; ++i) {
 
         //If User Has Page Tables Allocated Free Resources back to System
@@ -450,7 +482,10 @@ static int fifo(){
 
 static void checkFaultQ(){
 
-    struct p_Node * newNode;
+  //for testing
+  return; 
+
+  	struct p_Node * newNode;
 
     //Check if designated 14ms has passed
     while(checkTimerIO(faultQ, getTime())){
@@ -708,6 +743,8 @@ static void spawn(int idx){
 
         //Temp Block Handler from Terminating
         spawnFlag = true;
+
+//		signal(SIGHUP, sighup); 
 
         //Add Process to Process Array
         pidArray[idx]  = process_id;

@@ -9,7 +9,9 @@
 #define USER_H
 #define readPct 85               //Percentage to Read rather than write
 #include "headers.h"
+#include "shared.h"
 
+//enum actions{READ, WRITE, VALID, TERMINATE}; 
 
 int idx;                          //User Process Index
 int mID;                          //Message ID

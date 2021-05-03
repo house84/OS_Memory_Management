@@ -47,7 +47,7 @@ static int checkFull(struct  CircleQ * Q){
 void circleEnqueue(struct CircleQ * Q, int idx, int page, float timer){
 
     if(checkFull(Q)){
-        fprintf(stderr,"Queue: faultQ is full - time:%s\n", getSysTime());
+     //   fprintf(stderr,"Queue: faultQ is full - time:%s\n", getSysTime());
         return;
     }
 
@@ -70,7 +70,7 @@ struct p_Node * circleDequeue(struct CircleQ * Q){
     struct p_Node *newNode;
 
     if (checkEmpty(Q)) {
-        fprintf(stderr, "Queue: faultQ is Empty, can not Dequeue - Time: %s\n", getSysTime());
+      //  fprintf(stderr, "Queue: faultQ is Empty, can not Dequeue - Time: %s\n", getSysTime());
         return NULL;
     }
 
@@ -109,7 +109,7 @@ void printCircleQ(struct CircleQ * Q){
 bool checkTimerIO(struct CircleQ * Q, float time){
 
     if(checkEmpty(Q)){
-        fprintf(stderr, "Queue: faultQ is Empty\n");
+    //    fprintf(stderr, "Queue: faultQ is Empty\n");
         return NULL;
     }
 
