@@ -6,38 +6,117 @@
  */
 
 #include "Q.h"
-
+#include "oss.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-//struct Queue *GQue;
+//Initialize Circle Queue for pageFaults
+struct CircleQ * initCircleQ(){
 
-//int main () {
-//
-//    GQue = initQueue();
-//
-//    int arr[] = { 3, 4, 5, 7, 43, 6, 7, 54, 32, 23, 54, 63, 2134 };
-//
-//    int i;
-//    int size = sizeof (arr) / sizeof (int);
-//
-//    for (i = 0; i < size; ++i)
-//    {
-//
-//        // fprintf(stdout, "%d ", arr[i]);
-//        enqueue(GQue, i, arr[i]);
-//    }
-//
-//
-//    printQ(GQue);
-//    removeQ(GQue, 7, 3);
-//
-//    return 0;
-//}
-//
-//
-//
+    struct CircleQ * cQue = (struct CircleQ *) malloc (sizeof (struct CircleQ));
+
+    //initialize front and rear
+    cQue->front = -1;
+    cQue->rear = -1;
+    cQue->currSize = 0;
+    
+}
+
+
+//Check if Circle Q is Empty
+static int checkEmpty(struct CircleQ * Q){
+
+    if(Q->front == -1){
+        return 1;
+    }
+    return 0;
+}
+
+
+//Check if Circle Q is Full
+static int checkFull(struct  CircleQ * Q){
+
+    if((Q->front == Q->rear +1) || (Q->front == 0 && Q->rear == capacity -1)){
+        return -1;
+    }
+    return 0;
+}
+
+//Enqueue to Circle
+void circleEnqueue(struct CircleQ * Q, int idx, int page, float timer){
+
+    if(checkFull(Q)){
+        fprintf(stderr,"Queue: faultQ is full - time:%s\n", getSysTime());
+        return;
+    }
+
+    struct p_Node *newNode = (struct p_Node *) malloc (sizeof (struct p_Node));
+
+    if(Q->front == -1) { Q->front = 0; }
+
+    Q->rear = (Q->rear +1) % capacity;
+    Q->circleQ[Q->rear] = newNode;
+    newNode->idx = idx;
+    newNode->page = page;
+    newNode->timerIO = timer;
+    ++Q->currSize;
+}
+
+
+//Dequeue from Circle Q
+struct p_Node * circleDequeue(struct CircleQ * Q){
+
+    struct p_Node *newNode;
+
+    if (checkEmpty(Q)) {
+        fprintf(stderr, "Queue: faultQ is Empty, can not Dequeue - Time: %s\n", getSysTime());
+        return NULL;
+    }
+
+    newNode = Q->circleQ[Q->front];
+    if (Q->front == Q->rear) {
+        Q->front = Q->rear = -1;
+    }
+    else {
+        Q->front = (Q->front + 1) % capacity;
+    }
+
+    return newNode;
+}
+
+
+//Print Circle Queue
+void printCircleQ(struct CircleQ * Q){
+
+    int i;
+
+    if(checkEmpty(Q)){
+        fprintf(stderr, "Queue: faultQ is Empty\n");
+        return;
+    }
+
+    fprintf(stdout,"FaultQ Size: %d\nContents: ", Q->currSize);
+    for(i = Q->front; i != Q->rear; i = (i + 1 ) % capacity ){
+
+        fprintf(stdout, " [Idx: %d, Page: %d ]", Q->circleQ[i]->idx, Q->circleQ[i]->page);
+    }
+    fprintf(stdout, "\n\n");
+}
+
+
+//Check Head of Circle Queue
+bool checkTimerIO(struct CircleQ * Q, float time){
+
+    if(checkEmpty(Q)){
+        fprintf(stderr, "Queue: faultQ is Empty\n");
+        return NULL;
+    }
+
+    if(Q->circleQ[Q->front]->timerIO >= time){ return true; }
+
+    return false;
+}
 
 
 //Initialize Queue
@@ -163,7 +242,7 @@ void removeQ(struct Queue * Q, int idx, int page)
     }
 
    // printQ(tempQ);
-    GQue = tempQ;
+    Q = tempQ;
     free(tempQ);
    // printQ(GQue);
 }

@@ -56,19 +56,13 @@ int main(int argc, char * argv[]){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
-    while(run == true){
+    while(run == true || sys->run == true){
 
         //MOVE INTO FUNCTION LISTEN FOR TERMINATE
-        if(checkTermMsg()){
-            run = false;
-            break;
-        }
+        if(checkTermMsg()){ break; }
 
         //Check if User Should Self Terminate
-        if(checkTermPct()){
-            run = false;
-            break;
-        }
+        if(checkTermPct()){ break; }
 
         //Request Read/Write
         pageRequest();
@@ -104,10 +98,12 @@ static void pageRequest(){
     //Randomly Choose Read/Write Based On Read/Write %
     if(getRand(0,100) < readPct){
         bufS.action = READ;
+        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
         strcpy(bufS.mtext, "Read Access Request");
     }
     else {
         bufS.action = WRITE;
+        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
         strcpy(bufS.mtext, "Write Access Request");
     }
     bufS.mtype = mID;
@@ -116,7 +112,7 @@ static void pageRequest(){
         fprintf(stderr, "User: DEBUG: P%d -> %s\n", idx, bufS.mtext);
     }
 
-    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
+    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1 ){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 

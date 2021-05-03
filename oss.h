@@ -18,6 +18,7 @@ bool sigFlag;                          //Signal Termination Has been init
 time_t t;                              //Hold Time
 struct itimerval timer;                //Set Timer
 struct Queue * frameQ;                 //Que of All Allocated Pages
+struct CircleQ * faultQ;               //Circle Q to hold faults
 int concProc;                          //Number of Concurrent Processes
 int totalProc; 					       //Number of total procedures
 char logfile[50];                      //Logfile Name
@@ -39,6 +40,7 @@ static void createSharedMemory();
 static void closeLogfile();
 static void help();
 static void freeSharedMemory();
+static void freeUserResources();
 static void memoryHandler();
 static void spawn();
 static void checkMsg();

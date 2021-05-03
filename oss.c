@@ -28,6 +28,7 @@ int main(int argc, char * argv[]){
     totalProc = 0;
     allocatedFrames = 0;
     frameQ = initQueue();
+    faultQ = initCircleQ();
 
     srand(time(NULL));
 
@@ -59,6 +60,7 @@ int main(int argc, char * argv[]){
     int index;
     int iterTime;
     concProc = 0;
+    sys->run = true;
 
     time_t now;
     struct tm *tm;
@@ -104,7 +106,6 @@ int main(int argc, char * argv[]){
 
             //Allow User Process to Initialize
             if(msgrcv(shmidMsgInit, &bufI, sizeof(bufI.mtext), mID, 0) == -1){
-
                 perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
             }
         }
@@ -126,6 +127,8 @@ int main(int argc, char * argv[]){
         //Check if OSS should terminate
         if(totalProc > maxProc || terminateTimer == false){
 
+            sys->run = false;
+
             int j;
             //Send Message to Users to Terminate
             for(j = 0; j < maxConProc; ++j ){
@@ -133,10 +136,15 @@ int main(int argc, char * argv[]){
                 //Iterate through Active Processes
                 if( active[j] == true ){
 
+                    //Allow any user waiting on MsgSnd to continue
+                    if(msgrcv(shmidMsgInit, &bufR, sizeof(bufR.mtext), mID, IPC_NOWAIT) == -1){
+                        perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
+                    }
+
                     bufS.mtype = j+1;
                     bufS.action = TERMINATE;
                     strcpy(bufS.mtext, "terminate");
-                    if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+                    if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1){
                         perrorHandler("Master: ERROR: Failed to Send Message to User ");
                     }
                 }
@@ -185,43 +193,36 @@ static void memoryHandler(){
          int pageMinAddr = bufR.page*1024;             //p0 = Addressable from 0
          int pageMaxAddr = ((bufR.page+1)*1024) - 1;   //p0 = Addressable to 1023
          int page = bufR.page;
+         bool invalid = false;
+         bool terminate = false;
 
          //+++for Testing To Terminate
-         //bufR.address = -1;
+         bufR.address = -1;
          //++++++
 
          //Check if Address is invalid, then terminate
-         if( bufR.address < pageMinAddr || bufR.address > pageMaxAddr ){
+         if( bufR.action == TERMINATE ){
 
+             freeUserResources(idx, page);
+             return;
+         }
+         else if( bufR.address < pageMinAddr || bufR.address > pageMaxAddr ) {
+
+             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s", bufR.address, getSysTime());
+
+             invalid = true;
              //Invalid Address Terminate User Process
              bufS.mtype = bufR.mtype;
              bufS.action = TERMINATE;
              strcpy(bufS.mtext, "terminate");
-             if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+             if (msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1) {
                  perrorHandler("Master: ERROR: Failed to Send Message to User ");
              }
 
-
-             //Look at sys->PCB[userIdx]->
-             int i;
-             for(i = 0; i < 32; ++i){
-
-                 if( sys->pTable[idx].pageT[i].allocated = true ){
-                     //Free allocated Memory used by User
-                     unsetMemoryBit(sys->pTable[idx].pageT[i].frameIdx);
-                     sys->pTable[idx].pageT[i].allocated = false;
-                     removeQ(frameQ, idx, page);
-                 }
-             }
-
-             //Remove page from  frameQueue
-             active[idx] = false;
-             unsetUserIdxBit(idx);
-
-             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s", bufR.address, getSysTime());
-
+             freeUserResources(idx, page);
              return;
          }
+
 
          //check if frame has been allocated System memory
          if( sys->pTable[idx].pageT[page].allocated ) {
@@ -293,16 +294,39 @@ static void memoryHandler(){
           enqueue(frameQ, idx, page);
 
           //Add to faultQ
+          circleEnqueue(faultQ, idx, page, sys->pTable[idx].pageT[page].faultQRemove);
      }
 }
 
-//Queue for frames for FIFO and Daemon routine
-//
-//  frameQ
-//
-//
-//
-//
+
+//Free A User's Resources from system when Terminating
+static void freeUserResources(int idx, int page){
+
+    //Look at sys->PCB[userIdx]->
+    int i;
+    for (i = 0; i < 32; ++i) {
+
+        //If User Has Page Tables Allocated Free Resources back to System
+        if (sys->pTable[idx].pageT[i].allocated == true) {
+
+            int frameIdx = sys->pTable[idx].pageT[page].frameIdx;
+            fprintf(stderr, "Master: Clearing frame %d\n", frameIdx);
+            unsetMemoryBit(frameIdx);
+            sys->pTable[idx].pageT[i].allocated = false;
+            if(sys->pTable[idx].pageT[page].dirtyBit == true){
+                semWait(mutex);
+                incrementSysTime(getRand(10000000, 14000000));
+                semSignal(mutex);
+                fprintf(stderr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
+            }
+            removeQ(frameQ, idx, page);
+        }
+    }
+
+    //Remove User from OSS User management
+    active[idx] = false;
+    unsetUserIdxBit(idx);
+}
 
 //Find Available Memory Bit
 static int getMemoryBit(){
@@ -373,7 +397,6 @@ static void specialDaemon(){
 
         //Set iterations to 5% total Pages Allocated
         int iter = .05 * frameQ->currSize;
-        struct Queue * tempQ = initQueue();
         struct p_Node *newNode = frameQ->head;
 
         int i;
@@ -397,7 +420,9 @@ static void specialDaemon(){
                 if(sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit){
 
                     //Increment System Time for Dirty Bit Opt Cost
+                    semWait(mutex);
                     incrementSysTime(getRand(10000000, 14000000));
+                    semSignal(mutex);
                     sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit = false;
                     fprintf(stderr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
                 }
@@ -425,21 +450,29 @@ static int fifo(){
 
 static void checkFaultQ(){
 
-    //faultQueue that is circular
+    struct p_Node * newNode;
+
     //Check if designated 14ms has passed
-    //if So Fault Handler
-    //pass idx to faultHandler(idx);
+    while(checkTimerIO(faultQ, getTime())){
+
+        newNode = circleDequeue(faultQ);
+
+        bufS.mtype = newNode->idx+1;
+        bufS.action = VALID;
+        strcpy(bufS.mtext, "valid");
+        int idx = newNode->idx;
+        char action[100];
+        strcpy(action, sys->pTable[idx].pageT[newNode->page].action);
+        int addr = sys->pTable[idx].pageT[newNode->page].frameIdx;
+
+        fprintf(stderr, "Master: Indicating P%d that %s has happened at address %d\n", idx, action, addr);
+
+        if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+            perrorHandler("Master: ERROR: Failed to Send Message to User ");
+        }
+    }
 }
 
-//FIFO Page Fault
-static void faultHandler(int idx){
-
-    //Check Head of faultQ
-    //If 14ms passed from head
-    //while( faultQ->Head
-    //  msgsnd(user -> );
-
-}
 
 //Check User Message
 static void checkMsg(){

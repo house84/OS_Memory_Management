@@ -50,6 +50,7 @@ int shmidSem;
 typedef struct{
 
     int frameIdx;           //Frame Idx for System Bit Array
+    char action[bufLength]; //Hold Requested Action
     pid_t pid;              //Pid to help ID Process
     float time;             //Time Allocated to Memory
     float faultQRemove;     //Time added to faultQ
@@ -82,6 +83,7 @@ struct system{
     unsigned int seconds;
     unsigned int nanoSeconds;
     unsigned int fileLength;
+    bool run;
     bool debug;
     statistics stats;
     pcb pTable[maxConProc];
