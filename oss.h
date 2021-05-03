@@ -10,12 +10,14 @@
 #include "headers.h"
 #include "sharedFunc.h"
 #include "shared.h"
+#include "Q.h"
 
 bool debug;
 bool spawnFlag;                        //Varialbe to signal forking process
 bool sigFlag;                          //Signal Termination Has been init
 time_t t;                              //Hold Time
 struct itimerval timer;                //Set Timer
+struct Queue * frameQ;                 //Que of All Allocated Pages
 int concProc;                          //Number of Concurrent Processes
 int totalProc; 					       //Number of total procedures
 char logfile[50];                      //Logfile Name

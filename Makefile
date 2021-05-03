@@ -4,7 +4,7 @@ LDLIBS = -lm -lpthread -lrt
 LIBPATH = -L . -l 
 
 TARGET1 = oss
-OBJ1 = oss.o
+OBJ1 = oss.o Q.o
 
 TARGET2 = user_proc
 OBJ2 = user.o
@@ -13,7 +13,7 @@ TARGETLIB = libsharedFunc.a
 LIBOBJ = sharedFunc.o
 LIBC = sharedFunc.c
 
-HEADERS = headers.h shared.h oss.h user.h sharedFunc.h
+HEADERS = headers.h shared.h oss.h user.h sharedFunc.h Q.h
 
 .SUFFIXES: .c .o
 

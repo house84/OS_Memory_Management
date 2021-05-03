@@ -50,6 +50,7 @@ int shmidSem;
 typedef struct{
 
     int frameIdx;           //Frame Idx for System Bit Array
+    pid_t pid;              //Pid to help ID Process
     float time;             //Time Allocated to Memory
     float faultQRemove;     //Time added to faultQ
     bool allocated;         //Frame has been allocated

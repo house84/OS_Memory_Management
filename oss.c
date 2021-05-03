@@ -27,6 +27,8 @@ int main(int argc, char * argv[]){
 
     totalProc = 0;
     allocatedFrames = 0;
+    frameQ = initQueue();
+
     srand(time(NULL));
 
     //Parse Input Args
@@ -93,10 +95,10 @@ int main(int argc, char * argv[]){
         if( concProc < maxConProc ){
 
             //do some spawning
-            //Add bit Vector to get free Index
-            spawn(i);
-            mID = i+1;
-            active[i] = true;           //Track Active Processes
+            int idx = getUserIdxBit();
+            spawn(idx);
+            mID = idx+1;
+            active[idx] = true;           //Track Active Processes
             ++totalProc;                //Track Total Processes
             ++concProc;                 //Track Concurrent Processes
 
@@ -164,7 +166,7 @@ int main(int argc, char * argv[]){
 //page Handler
 static void memoryHandler(){
 
-    //call
+    //Summon the Daemon
     specialDaemon();
 
     int idx;
@@ -199,14 +201,24 @@ static void memoryHandler(){
                  perrorHandler("Master: ERROR: Failed to Send Message to User ");
              }
 
-             active[idx] = false;
-             //Look at sys->PCB[userIdx]->
-             //     Free Bit Index Array User Indexes Needs Freed
-             //     Free Memory from 256k Bit Array
-             //     User pageTable = Free all allocated space from 256k array
-             //     Remove page from  frameQueue
 
-             fprintf(stdout, "Master: P%d Requested Invalid Memory, Terminating. Time: %s", idx, getSysTime());
+             //Look at sys->PCB[userIdx]->
+             int i;
+             for(i = 0; i < 32; ++i){
+
+                 if( sys->pTable[idx].pageT[i].allocated = true ){
+                     //Free allocated Memory used by User
+                     unsetMemoryBit(sys->pTable[idx].pageT[i].frameIdx);
+                     sys->pTable[idx].pageT[i].allocated = false;
+                     removeQ(frameQ, idx, page);
+                 }
+             }
+
+             //Remove page from  frameQueue
+             active[idx] = false;
+             unsetUserIdxBit(idx);
+
+             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s", bufR.address, getSysTime());
 
              return;
          }
@@ -214,9 +226,25 @@ static void memoryHandler(){
          //check if frame has been allocated System memory
          if( sys->pTable[idx].pageT[page].allocated ) {
 
-             //set valid bit = true, refBit or dirtyBit depending on Read/Write
-             //bufR.page
-             //Return message to User to continue
+             //set valid bit = true,
+             sys->pTable[idx].pageT[page].validBit = true;
+
+             //refBit or dirtyBit depending on Read/Write
+             if(bufR.action == READ){
+                 sys->pTable[idx].pageT[page].refByte = true;
+             }
+             else{
+                 sys->pTable[idx].pageT[page].dirtyBit = true;
+             }
+
+             bufS.mtype = bufR.mtype;
+             bufS.action = VALID;
+             strcpy(bufS.mtext, "valid");
+
+             if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
+                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
+             }
+
              return;
          }
 
@@ -261,13 +289,14 @@ static void memoryHandler(){
               sys->pTable[idx].pageT[page].dirtyBit = true;
           }
 
-          //++++++++++++ NEED TO ADD THESE FUNCTIONS
           //Add to frameQueue
-          //PAGE FAULT -> add to faultQueue
+          enqueue(frameQ, idx, page);
+
+          //Add to faultQ
      }
 }
 
-//Make circular Queue for frames for FIFO and Daemon routine
+//Queue for frames for FIFO and Daemon routine
 //
 //  frameQ
 //
@@ -296,34 +325,94 @@ static void unsetMemoryBit(int idx){
 
 //Find Available User Idx
 static int getUserIdxBit(){
-    int idx;
 
-    return idx;
+    unsigned int i = 1;
+    int idx = 0;
+
+    //Search bitVector R->L until 0 is found
+    while(( i & userBitVector) && (idx < maxConProc)){
+
+        i <<= 1;
+        ++idx;
+    }
+
+    if( idx < maxConProc ){
+
+        //Set Bit Func
+        setUserIdxBit(idx);
+
+        return idx;
+    }
+
+    else{
+
+        return -1;
+    }
 }
 
 
 //Set Bit for User Process Idx
 static void setUserIdxBit(int idx) {
 
+    userBitVector |= ( 1 << idx );
 }
 
 //Unset Bit from User Vector
 static void unsetUserIdxBit(int idx){
 
+    userBitVector &= ~( 1 << idx );
 }
 
-
+//Run Daemon Process to Free Frames
 static void specialDaemon(){
 
-    //when free frames from memory < 25
-    //Create int to allocatedFrameTotal
+    //if Free frames < 10% Run Daemon
+    if( frameQ->currSize >  231){
 
-    //search frameQueue for oldest/first 5% of allocatedFrameTotal
-    //Set validBit = false, if false free that memory location;
-    //
-    //Free page from system Memory 256k Bit Array
-    //Reset user frame to default
-    //Remove page from Circular Queue
+        fprintf(stderr, "Master: Daemon Process Running - Time: %s\n", getSysTime());
+
+        //Set iterations to 5% total Pages Allocated
+        int iter = .05 * frameQ->currSize;
+        struct Queue * tempQ = initQueue();
+        struct p_Node *newNode = frameQ->head;
+
+        int i;
+        for(i = 0; i < iter; ++i)
+        {
+            if(newNode == NULL) { break; }
+
+            //Free Oldest Frames with validBit == false
+            if(sys->pTable[newNode->idx].pageT[newNode->page].validBit == false){
+
+                int frameIdx = sys->pTable[newNode->idx].pageT[newNode->page].frameIdx;
+                fprintf(stderr, "Master: Daemon Process is clearing Frame %d\n", frameIdx);
+
+                //Free allocated Memory used by User
+                unsetMemoryBit(frameIdx);
+
+                //Reset Frames Values to Default
+                sys->pTable[newNode->idx].pageT[newNode->page].allocated = false;
+                sys->pTable[newNode->idx].pageT[newNode->page].refByte = false;
+                sys->pTable[newNode->idx].pageT[newNode->page].validBit = false;
+                if(sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit){
+
+                    //Increment System Time for Dirty Bit Opt Cost
+                    incrementSysTime(getRand(10000000, 14000000));
+                    sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit = false;
+                    fprintf(stderr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
+                }
+
+                //Remove Frame from Queue
+                removeQ(frameQ, newNode->idx, newNode->page);
+            }
+            else{
+
+                sys->pTable[newNode->idx].pageT[newNode->page].validBit = false;
+            }
+
+            newNode = newNode->next;
+        }
+    }
 }
 
 static int fifo(){
