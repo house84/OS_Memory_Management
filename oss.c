@@ -76,9 +76,9 @@ int main(int argc, char * argv[]){
     bool go = true;
     bool terminateTimer = false;
 
-    while(true){
-  //  int i;
-   // for(i = 0; i < maxConProc; ++i){
+   	while(true){
+    //int j;
+    //for(j = 0; j < 200; ++j){
 
         //Check Timer
         if(terminateTimer == false){
@@ -100,7 +100,7 @@ int main(int argc, char * argv[]){
         semSignal(mutex);
 
         //Check fault Q for IO Ready
-        //checkFaultQ();
+        checkFaultQ();
 
 
         if( concProc < maxConProc ){
@@ -192,7 +192,13 @@ static void allocateCPU(){
 
     
 	//Check for runnable Processes
-    if(processQ->currSize == 0){ return; }
+    if(processQ->currSize == 0){ 
+			
+			fprintf(stderr, "Process Q Empty\n"); 
+
+			return; 
+		
+		}
 
     //Dequeue Process
     CPU_Node = dequeue(processQ);
@@ -287,30 +293,29 @@ static void allocateCPU(){
 
     if( strcmp(bufR.mtext, "Read") == 0){
 
-        //Handle User Memory Request
-        //memoryHandler();
 		if( debug == true){
 			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
 		}
 
         //This is for Testing and will go in Memory Handler
-		//memoryHandler(idx, page, READ); 
-        enqueue(processQ, idx, 0);
+		memoryHandler(idx, page, READ); 
+        //enqueue(processQ, idx, 0);
 
         return;
     }
 
     if(strcmp(bufR.mtext, "Write") == 0){
 		
-        //Handle User Memory Request
-        //memoryHandler(idx, page, WRITE);
 
 		 if( debug == true){
 			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
 		 }
 		 
+        //Handle User Memory Request
+        memoryHandler(idx, page, WRITE);
+		
 		//This is for Testing and will go in Memory Handler
-        enqueue(processQ, idx, 0);
+        //enqueue(processQ, idx, 0);
 
         return;
     }
@@ -321,7 +326,7 @@ static void allocateCPU(){
 static void memoryHandler(int idx, int page, int RW){
 
     //Summon the Daemon
-    specialDaemon();
+    //specialDaemon();
 
 
     //check if frame has been allocated System memory
@@ -337,6 +342,8 @@ static void memoryHandler(int idx, int page, int RW){
         else{
             sys->pTable[idx].pageT[page].dirtyBit = true;
         }
+
+		enqueue(processQ, idx, 0); 
 
         return;
     }
@@ -393,7 +400,7 @@ static void freeUserResources(int idx, int page){
 
     if( debug == true){
 
-		fprintf(stderr, "Master: DEBUG: P%d Freeing Resources\n"); 
+		fprintf(stderr, "Master: DEBUG: P%d Freeing Resources\n", idx); 
 	}
 	
 	int i;
@@ -402,19 +409,20 @@ static void freeUserResources(int idx, int page){
         //If User Has Page Tables Allocated Free Resources back to System
         if (sys->pTable[idx].pageT[i].allocated == true) {
 
-            int frameIdx = sys->pTable[idx].pageT[page].frameIdx;
-            fprintf(stderr, "Master: Clearing frame %d\n", frameIdx);
+            int frameIdx = sys->pTable[idx].pageT[i].frameIdx;
+            fprintf(stderr, "Master: \tClearing frame %d\n", frameIdx);
             unsetMemoryBit(frameIdx);
             sys->pTable[idx].pageT[i].allocated = false;
-            if(sys->pTable[idx].pageT[page].dirtyBit == true){
+            if(sys->pTable[idx].pageT[i].dirtyBit == true){
                 semWait(mutex);
                 incrementSysTime(getRand(10000000, 14000000));
                 semSignal(mutex);
-                fprintf(stderr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
+                fprintf(stderr, "Master: \tDirty Bit of frame %d set, time added to system clock\n", frameIdx);
             }
-            removeQ(frameQ, idx, page);
         }
     }
+    
+	removeQ(frameQ, idx, page);
 
     //Remove User from OSS User management
     //active[idx] = false;
@@ -576,9 +584,16 @@ static int fifo(){
 static void checkFaultQ(){
 
   	struct p_Node * newNode;
+		
+	bool release = checkTimerIO(faultQ, getTime()); 
+
+	if( debug == true ){
+
+		fprintf(stderr, "Master: DEBUG: checkFaultQ %d\n", release); 
+	}
 
     //Check if designated 14ms has passed
-    while(checkTimerIO(faultQ, getTime())){
+    while(release){
 
         newNode = circleDequeue(faultQ);
 
@@ -589,6 +604,8 @@ static void checkFaultQ(){
         char action[100];
         strcpy(action, sys->pTable[idx].pageT[newNode->page].action);
         int addr = sys->pTable[idx].pageT[newNode->page].frameIdx;
+		
+		release = checkTimerIO(faultQ, getTime()); 
 		
 		//Add Process Back into RunQ
 		enqueue(processQ, idx, 0); 

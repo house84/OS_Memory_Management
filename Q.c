@@ -109,11 +109,11 @@ void printCircleQ(struct CircleQ * Q){
 bool checkTimerIO(struct CircleQ * Q, float time){
 
     if(checkEmpty(Q)){
-    //    fprintf(stderr, "Queue: faultQ is Empty\n");
-        return NULL;
+        fprintf(stderr, "Queue: faultQ is Empty\n");
+        return false;
     }
 
-    if(Q->circleQ[Q->front]->timerIO >= time){ return true; }
+    if(Q->circleQ[Q->front]->timerIO <= time){ return true; }
 
     return false;
 }
