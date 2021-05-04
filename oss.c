@@ -245,7 +245,11 @@ static void allocateCPU(){
     //Handle User Message
     if( strcmp(bufR.mtext, "terminate") == 0){
 
-        unsetUserIdxBit(idx);
+		fprintf(stderr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
+		
+		freeUserResources(idx, page); 
+        
+		unsetUserIdxBit(idx);
         active[idx] = false;
 
         if(debug == true){
@@ -257,6 +261,10 @@ static void allocateCPU(){
     }
 
 	if( address < pageMinAddr || address > pageMaxAddr ){
+
+		fprintf(stderr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
+		
+		freeUserResources(idx, page); 
 
 		bufS.mtype = mID; 
 		strcpy(bufS.mtext, "terminate"); 
@@ -286,6 +294,7 @@ static void allocateCPU(){
 		}
 
         //This is for Testing and will go in Memory Handler
+		//memoryHandler(idx, page, READ); 
         enqueue(processQ, idx, 0);
 
         return;
@@ -294,7 +303,7 @@ static void allocateCPU(){
     if(strcmp(bufR.mtext, "Write") == 0){
 		
         //Handle User Memory Request
-        //memoryHandler();
+        //memoryHandler(idx, page, WRITE);
 
 		 if( debug == true){
 			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
@@ -309,85 +318,10 @@ static void allocateCPU(){
 
 
 //page Handler
-static void memoryHandler(){
+static void memoryHandler(int idx, int page, int RW){
 
     //Summon the Daemon
     specialDaemon();
-
-    int idx;
-    int mID;
-    bool invalidAddr = false;
-
-    //ADD LOGIC TO HANDLE USERS MESSAGES TO REQUEST MEMORY READ
-     bufR.mtype =-1;
-     //if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, IPC_NOWAIT) == -1){
-     if(msgrcv( shmidMsgRec, &bufR, sizeof(bufR.mtext), 0, 0) == -1){
-           perrorHandler("Master: ERROR: Failed to Receive Message msgrcv() ");
-     }
-
-     //If User Message Received
-     if(bufR.mtype != -1){
-
-         mID = bufR.mtype;
-         idx = mID - 1;
-         int page = sys->pTable[idx].frameIdx;
-         int pageMinAddr = page*1024;             //p0 = Addressable from 0
-         int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
-		 int address = sys->pTable[idx].pageT[page].address; 
-		 int actionNum = sys->pTable[idx].pageT[page].actionNum; 
-		 char msg[200]; 
-		 strcpy(msg, bufR.mtext); 
-         bool invalid = false;
-         bool terminate = false;
-
-		 if( debug == true){
-			 fprintf(stderr, "Master: DEBUG: MemoryHandler() Page: %d Address: %d P%d  Action: %d Message: %s\n", page, address, idx, actionNum, msg); 
-		 }
-
-         //+++for Testing To Terminate
-        // bufR.address = -1;
-         //++++++
-
-         //Check if Address is invalid, then terminate
-         //if( actionNum ==  TERMINATE ){
-         if( strcmp(bufR.mtext, "terminate") == 0){
-
-			fprintf(stderr, "In Terminate\n"); 
-
-             invalid = true;
-             
-			 bufS.mtype = bufR.mtype;
-             bufS.action = TERMINATE;
-             strcpy(bufS.mtext, "terminate");
-             if (msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1) {
-                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
-             }
-            	
-			 wait(NULL); 
-			 --concProc; 
-
-			 freeUserResources(idx, page);
-             return;
-         }
-         else if( address < pageMinAddr || address > pageMaxAddr ) {
-
-             fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s\n", idx, bufS.address, getSysTime());
-
-             invalid = true;
-             //Invalid Address Terminate User Process
-             bufS.mtype = bufR.mtype;
-             bufS.action = TERMINATE;
-             strcpy(bufS.mtext, "terminate");
-             if (msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1) {
-                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
-             }
-
-			 wait(NULL); 
-			 --concProc; 
-             
-			 freeUserResources(idx, page);
-             return;
-         }
 
 
          //check if frame has been allocated System memory
@@ -397,19 +331,11 @@ static void memoryHandler(){
              sys->pTable[idx].pageT[page].validBit = true;
 
              //refBit or dirtyBit depending on Read/Write
-             if(bufR.action == READ){
+             if(RW == READ){
                  sys->pTable[idx].pageT[page].refByte = true;
              }
              else{
                  sys->pTable[idx].pageT[page].dirtyBit = true;
-             }
-
-             bufS.mtype = bufR.mtype;
-             bufS.action = VALID;
-             strcpy(bufS.mtext, "valid");
-
-             if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
-                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
              }
 
              return;
@@ -421,7 +347,6 @@ static void memoryHandler(){
 
              //Allocate Memory
              sys->pTable[idx].pageT[page].frameIdx = memIdx;
-             setMemoryBit(memIdx);
          }
           else{
 
@@ -430,7 +355,6 @@ static void memoryHandler(){
 
              //Allocate Memory
              sys->pTable[idx].pageT[page].frameIdx = memIdx;
-             setMemoryBit(memIdx);
           }
 
           ++allocatedFrames;
@@ -447,7 +371,7 @@ static void memoryHandler(){
           //set faultQRemove to 14ms past current time
           sys->pTable[idx].pageT[page].faultQRemove = getTime() + .014;
 
-          if( bufR.action == READ ){
+          if( RW == READ ){
 
               sys->pTable[idx].pageT[page].refByte = true;
           }
@@ -461,7 +385,6 @@ static void memoryHandler(){
 
           //Add to faultQ
           circleEnqueue(faultQ, idx, page, sys->pTable[idx].pageT[page].faultQRemove);
-     }
 }
 
 
@@ -494,8 +417,8 @@ static void freeUserResources(int idx, int page){
     }
 
     //Remove User from OSS User management
-    active[idx] = false;
-    unsetUserIdxBit(idx);
+    //active[idx] = false;
+    //unsetUserIdxBit(idx);
 }
 
 //Find Available Memory Bit
