@@ -26,21 +26,16 @@
 enum sems{mutex};
 enum actions{READ, WRITE, VALID, TERMINATE};
 
-void sighup(); 
 
 //Message Buffer
 struct{
 
     long mtype;
     char mtext[bufLength];
-
-//	struct Info{
-
-    	int action;               //READ(0) WRITE(1) TERMINATE(2)
-    	int page;                 //Index Within Page Table
-    	int offset;               //Page Offset
-    	int address;              //Address For Read/Write
-//	}F; 
+    int action;               //READ(0) WRITE(1) TERMINATE(2)
+    int page;                 //Index Within Page Table
+    int offset;               //Page Offset
+    int address;              //Address For Read/Write
 
 } bufI, bufS, bufR;
 //Init,  Send,  Receive
@@ -54,12 +49,7 @@ int shmidSem;
 
 typedef struct{
 
-    int page; 
-	int offset; 
-	int actionNum; 
-	int address; 
-
-	int frameIdx;           //Frame Idx for System Bit Array
+    int frameIdx;           //Frame Idx for System Bit Array
     char action[bufLength]; //Hold Requested Action
     pid_t pid;              //Pid to help ID Process
     float time;             //Time Allocated to Memory
