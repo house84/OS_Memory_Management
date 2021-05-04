@@ -79,7 +79,7 @@ int main(int argc, char * argv[]){
 //        pageRequest();
 
 
-    while(run == true){
+    while(run == true && sys->run == true){
 
 
         //Recienve Message to Run from CPU

@@ -103,8 +103,8 @@ int main(int argc, char * argv[]){
         //checkFaultQ();
 
 
-        //if( concProc < maxConProc ){
-        if( concProc < 1 ){
+        if( concProc < maxConProc ){
+        //if( concProc < 1 ){
 
             //do some spawning
             int idx = getUserIdxBit();
@@ -146,11 +146,24 @@ int main(int argc, char * argv[]){
         //Check if OSS should terminate
         if((totalProc > maxProc || terminateTimer == true)){ // && concProc == 0 ){
 
-           if(debug == true){
+		   sys->run = false;
+           
+		   if(debug == true){
 
 			   fprintf(stderr, "Master: Ending Loop: Total Proc = %d  Timer%d\n", totalProc, terminateTimer); 
 		   }
-		   sys->run = false;
+		   
+		   sleep(1); 
+
+		   int i; 
+		   for( i == 0 ; i < maxConProc; ++i){
+
+			   if( active[i] == true){
+					
+					bufS.mtype = i+1; 
+					msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT); 
+				}
+		   }
 
             break;
         }
@@ -160,13 +173,13 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Master: DEBUG: Driver Loop Exited Total Processes: %d  Time: %s\n", totalProc, getSysTime());
     }
 
-	signalHandler(0); 
+//	signalHandler(0); 
 
     //Allow Processes to finish
     while(wait(NULL) > 0){}
 
     //Clean up Resources
-//    signalHandler(3126);
+    signalHandler(3126);
 
     if(debug == true){
         fprintf(stderr, "Master: DEBUG: Resources Free Exiting Program\n");
