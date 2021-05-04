@@ -28,8 +28,12 @@ int main(int argc, char * argv[]){
 
     totalProc = 0;
     allocatedFrames = 0;
+    processQ = initQueue();
     frameQ = initQueue();
     faultQ = initCircleQ();
+
+    //Initialize CPU Node
+    CPU_Node = (struct p_Node*)malloc(sizeof(struct p_Node));
 
     srand(time(NULL));
 
@@ -56,9 +60,9 @@ int main(int argc, char * argv[]){
     openLogfile();
     createSharedMemory();
     sys->debug = debug;
-    int mID;
 
-    int index;
+
+   // int index;
     int iterTime;
     concProc = 0;
     sys->run = true;
@@ -95,28 +99,36 @@ int main(int argc, char * argv[]){
         incrementSysTime(rand()%500000001 + 1000000);
         semSignal(mutex);
 
+        //Check fault Q for IO Ready
+        //checkFaultQ();
+
+
         //if( concProc < maxConProc ){
         if( concProc < 1 ){
 
             //do some spawning
             int idx = getUserIdxBit();
-            spawn(idx);
-            mID = idx+1;
-            active[idx] = true;           //Track Active Processes
-            ++totalProc;                //Track Total Processes
-            ++concProc;                 //Track Concurrent Processes
 
-            //Allow User Process to Initialize
-            if(msgrcv(shmidMsgInit, &bufI, sizeof(bufI.mtext), mID, 0) == -1){
-                perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
+            if(idx != -1){
+
+                int mID = idx+1;
+                spawn(idx);
+
+                active[idx] = true;           //Track Active Processes
+                ++totalProc;                //Track Total Processes
+                ++concProc;                 //Track Concurrent Processes
+
+                //Allow User Process to Initialize
+                if(msgrcv(shmidMsgInit, &bufI, sizeof(bufI.mtext), mID, 0) == -1){
+                    perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
+                }
+
+                enqueue(processQ, idx, 0);
             }
+
         }
 
-        //Handle User Memory Request
-        memoryHandler();
-
-        //Check fault Queue
-        checkFaultQ();
+        allocateCPU();
 
 		//check for Finished Processes
         int status;
@@ -127,39 +139,13 @@ int main(int argc, char * argv[]){
         }
 
         //Check if OSS should terminate
-        if(totalProc > maxProc || terminateTimer == true){
+        if((totalProc > maxProc || terminateTimer == true)){ // && concProc == 0 ){
 
            if(debug == true){
 
 			   fprintf(stderr, "Master: Ending Loop: Total Proc = %d  Timer%d\n", totalProc, terminateTimer); 
 		   }
 		   sys->run = false;
-
-          // kill(0 ,SIGQUIT); 
-		  
-		 // wait(NULL); 
-		 //  	int j;
-            //Send Message to Users to Terminate
-         //   for(j = 0; j < maxConProc; ++j ){
-
-                //Iterate through Active Processes
-           //     if( active[j] == true ){
-
-                    //Allow any user waiting on MsgSnd to continue
-             //       if(msgrcv(shmidMsgInit, &bufR, sizeof(bufR.mtext), mID, 0) == -1){
-              //          perrorHandler("Master: ERROR: Failed to RCV Message from user msgrcv() ");
-               //     }
-
-                 //   bufS.mtype = j+1;
-                  //  bufS.action = TERMINATE;
-                  //  strcpy(bufS.mtext, "terminate");
-                   // if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
-                    //    perrorHandler("Master: ERROR: Failed to Send Message to User ");
-                    //}
-                	
-				//}
-           // }
-	
 
             break;
         }
@@ -184,6 +170,85 @@ int main(int argc, char * argv[]){
     return 0;
 }
 
+//CPU Handler
+static void allocateCPU(){
+
+    //Check for runnable Processes
+    if(processQ->currSize == 0){ return; }
+
+    //Dequeue Process
+    CPU_Node = dequeue();
+
+    //Check Node
+    if(CPU_Node == NULL){
+
+        fprintf(stderr,"Que Head Empty\n");
+        return;
+    }
+
+    int idx = CPU_Node->idx;
+    int mID = CPU_Node->idx+1;
+
+    bufS.mtype = mID;
+    strcpy(bufS.mtext, "Run");
+
+    if((msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0)) == -1 ){
+
+        fprintf(stderr, "OSS: FAILED::: mID: %d\n", mID);
+        perror("oss: ERROR: Failed to Send Msg to User msgsnd() ");
+        exit(EXIT_FAILURE);
+    }
+
+    //Wait for message from User to simulate end CPU
+    msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0);
+
+    //Handle User Message
+    //Check return
+    if( strcmp(bufR.mtext, "terminated") == 0){
+
+        unsetUserIdxBit(idx);
+        active[idx] = 0;
+
+        if(debug == true){
+
+            fprintf(stderr, "Master: DEBUG: P%d Process Terminating Time: %s\n", idx, getSysTime());
+        }
+
+        return;
+    }
+
+    if( strcmp(bufR.mtext, "Read") == 0){
+
+        if(debug == true){
+
+            fprintf(stderr, "Master: DEBUG: P%d Process Read Request Time: %s\n", idx, getSysTime());
+        }
+
+        //Handle User Memory Request
+        //memoryHandler();
+
+        //This is for Testing and will go in Memory Handler
+        enqueue(processQ, idx, 0);
+
+        return;
+    }
+
+    if(strcmp(bufR.mtext, "Write") == 0){
+
+        if(debug == true){
+
+            fprintf(stderr, "Master: DEBUG: P%d Process Write Request Time: %s\n", idx, getSysTime());
+        }
+
+        //Handle User Memory Request
+        //memoryHandler();
+
+        //This is for Testing and will go in Memory Handler
+        enqueue(processQ, idx, 0);
+
+        return;
+    }
+}
 //page Handler
 static void memoryHandler(){
 
@@ -191,6 +256,7 @@ static void memoryHandler(){
     specialDaemon();
 
     int idx;
+    int mID;
     bool invalidAddr = false;
 
     //ADD LOGIC TO HANDLE USERS MESSAGES TO REQUEST MEMORY READ
@@ -203,8 +269,9 @@ static void memoryHandler(){
      //If User Message Received
      if(bufR.mtype != -1){
 
-         idx = bufR.mtype - 1;
-         int page = sys->pTable[idx].pageT[bufR.page].page;
+         mID = bufR.mtype;
+         idx = mID - 1;
+         int page = sys->pTable[idx].frameIdx;
          int pageMinAddr = page*1024;             //p0 = Addressable from 0
          int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
 		 int address = sys->pTable[idx].pageT[page].address; 

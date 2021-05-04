@@ -20,7 +20,9 @@ bool sigFlag;                          //Signal Termination Has been init
 time_t t;                              //Hold Time
 struct itimerval timer;                //Set Timer
 struct Queue * frameQ;                 //Que of All Allocated Pages
+struct Queue * processQ;               //Que of All Processes
 struct CircleQ * faultQ;               //Circle Q to hold faults
+struct p_Node *CPU_Node;               //Node to Hold CPU Process
 int concProc;                          //Number of Concurrent Processes
 int totalProc; 					       //Number of total procedures
 char logfile[50];                      //Logfile Name
@@ -37,6 +39,7 @@ int32_t userBitVector;                 //Integer to track Concurrent Users
 int32_t memory[sysMemBitIndex];        //Bit Arr for System Memory 256K
 
 static void signalHandler();
+static void allocateCPU();
 static void openLogfile();
 static void createSharedMemory();
 static void closeLogfile();

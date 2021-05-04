@@ -24,5 +24,6 @@ static bool checkTermMsg();       //Check msg for Terminate
 static bool checkTermPct();       //Check if User Should Terminate
 static void initSysTime();        //Initiate SHM for System
 static void pageRequest();        //Generate Read/Write Request
+static void sendMessage();
 
 #endif //OS_MEMORY_MANAGEMENT_USER_H

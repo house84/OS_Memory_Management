@@ -49,6 +49,11 @@ int shmidSem;
 
 typedef struct{
 
+    int actionNum;               //READ(0) WRITE(1) TERMINATE(2)
+    int page;                 //Index Within Page Table
+    int offset;               //Page Offset
+    int address;              //Address For Read/Write
+
     int frameIdx;           //Frame Idx for System Bit Array
     char action[bufLength]; //Hold Requested Action
     pid_t pid;              //Pid to help ID Process
@@ -67,7 +72,6 @@ typedef struct{
     pid_t pid;
     int delimeter;
     int frameIdx;
-	int page; 
     frame pageT[pTableSize];
 } pcb;
 

@@ -16,7 +16,7 @@ int main(int argc, char * argv[]){
 
     srand(time(NULL) ^ (getpid()<<16));
 
-	signal(SIGQUIT, sighup); 
+	//signal(SIGQUIT, sighup);
 
     //Set Shmids
     idx = atoi(argv[1]);                //Set Index
@@ -60,23 +60,43 @@ int main(int argc, char * argv[]){
         perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
     }
 
-    while(run == true){ // && sys->run == true){
+//    while(run == true){ // && sys->run == true){
+//
+//        //MOVE INTO FUNCTION LISTEN FOR TERMINATE
+//      //  if(checkTermMsg()){ break; }
+//
+//        //Check if User Should Self Terminate
+//        if(checkTermPct()){
+//
+//			if(sys->debug == true){
+//				fprintf(stderr, "User: P%d DEBUG: Check Terminate True \n", idx);
+//			}
+//			run = false;
+//			break;
+//		}
+//
+//        //Request Read/Write
+//        pageRequest();
 
-        //MOVE INTO FUNCTION LISTEN FOR TERMINATE
-      //  if(checkTermMsg()){ break; }
 
-        //Check if User Should Self Terminate
-        if(checkTermPct()){ 
-			
-			if(sys->debug == true){
-				fprintf(stderr, "User: P%d DEBUG: Check Terminate True \n", idx);
-			}
-			run = false; 
-			break; 
-		}
+    while(run == true){
 
-        //Request Read/Write
-        pageRequest();
+        //Recienve Message to Run from CPU
+        msgrcv(shmidMsgRec, &bufS, sizeof(bufR.mtext), mID, 0);
+
+
+        int cmp = strcmp(bufR.mtext, "terminate");
+        //fprintf(stderr, "User Process %d terminate: %d\n", idx, cmp);
+
+        if( cmp == 0 ){
+
+            run = false;
+
+            break;
+        }
+
+        //Send Message Back to OSS
+        sendMessage(shmidMsgRec);
     }
 
     if(sys->debug == true){
@@ -88,6 +108,44 @@ int main(int argc, char * argv[]){
 
     exit(EXIT_SUCCESS);
 
+}
+
+//Message Handling
+static void sendMessage(int msgid){
+
+    bufS.mtype = mID;
+
+    if( checkTermPct() ){
+
+        strcpy(bufS.mtext, "terminate");
+        run = false;
+
+        if(sys->debug == true ){
+
+            fprintf(stderr, "User: DEBUG: P%d Terminating\n", idx);
+        }
+
+        return;
+    }
+
+    int page = getRand(0,31);
+    int offset = getRand(-10, 1035);
+    int address = page*1024 + offset;
+    sys->pTable[idx].frameIdx = page;
+
+    //Randomly Choose Read/Write Based On Read/Write %
+    if(getRand(0,100) < readPct){
+        // bufS.action = READ;
+        sys->pTable[idx].pageT[page].actionNum = READ;
+        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
+        strcpy(bufS.mtext, "Read Access Request");
+    }
+    else {
+        //bufS.action = WRITE;
+        sys->pTable[idx].pageT[page].actionNum = WRITE;
+        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
+        strcpy(bufS.mtext, "Write Access Request");
+    }
 }
 
 //Generate Memory Request for Read/Write
