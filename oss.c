@@ -173,12 +173,11 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Master: DEBUG: Driver Loop Exited Total Processes: %d  Time: %s\n", totalProc, getSysTime());
     }
 
-//	signalHandler(0); 
 
     //Allow Processes to finish
     while(wait(NULL) > 0){}
 
-    //Clean up Resources
+   	//Clean up Resources
     signalHandler(3126);
 
     if(debug == true){
@@ -484,21 +483,51 @@ static void freeUserResources(int idx, int page){
 
 //Find Available Memory Bit
 static int getMemoryBit(){
-    int idx;
+    
+	unsigned int i = 1; 
+	int idx = 0; 
+	int index = 0; 
 
-    //search for Index
+	//Search R->L Until 0 is Found
+	while(( i & memory[index]) && (idx < 256)){
 
-    return idx;
+		i <<= 1; 
+		++idx; 
+		
+		if(idx % 32 == 0) { 
+			
+			++index; 
+			i = 1; 
+		}
+	}
+
+	if( idx < 256 ){
+
+		setMemoryBit(idx); 
+
+		return idx; 
+	}
+	
+	else{ return -1; }
 }
 
 //Set Bit for Allocated Page in Sys Memory
 static void setMemoryBit(int idx){
 
+	int index = idx/32; 
+	int offset = idx%32; 
+
+	memory[index] |= ( 1 << offset ); 
 }
+
 
 //Unset Bit from Memory Vector
 static void unsetMemoryBit(int idx){
 
+	int index = idx/32;
+	int offset = idx%32; 
+
+	memory[index] &= ~( 1 << offset ); 
 }
 
 //Find Available User Idx
