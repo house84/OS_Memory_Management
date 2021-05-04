@@ -211,7 +211,7 @@ static void allocateCPU(){
 	
 	if(debug == true ){
 
-		fprintf(stderr, "Master: DEBUG: P Allocate CPU\n"); 
+		fprintf(stderr, "Master: DEBUG: P Allocate CPU\n", idx); 
 	}
 	
 
@@ -234,30 +234,47 @@ static void allocateCPU(){
 		fprintf(stderr, "Master: DEBUG: P%d Message Recieved: %s\n", idx, bufR.mtext); 
 	}
 
+    int page = sys->pTable[idx].frameIdx;
+    int pageMinAddr = page*1024;             //p0 = Addressable from 0
+    int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
+    int address = sys->pTable[idx].pageT[page].address; 
+	int actionNum = sys->pTable[idx].pageT[page].actionNum; 
+	char msg[200]; 
+	strcpy(msg, sys->pTable[idx].pageT[page].action);  
 
     //Handle User Message
-    //Check return
     if( strcmp(bufR.mtext, "terminate") == 0){
 
         unsetUserIdxBit(idx);
-        active[idx] = 0;
+        active[idx] = false;
 
         if(debug == true){
 
-            fprintf(stderr, "Master: DEBUG: P%d Process Terminating Time: %s\n", idx, getSysTime());
+            fprintf(stderr, "Master: DEBUG: P%d Process is Terminating Time: %s\n", idx, getSysTime());
         }
 
         return;
     }
 
+	if( address < pageMinAddr || address > pageMaxAddr ){
 
-        int page = sys->pTable[idx].frameIdx;
-        int pageMinAddr = page*1024;             //p0 = Addressable from 0
-        int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
-		int address = sys->pTable[idx].pageT[page].address; 
-		int actionNum = sys->pTable[idx].pageT[page].actionNum; 
-		char msg[200]; 
-		strcpy(msg, sys->pTable[idx].pageT[page].action);  
+		bufS.mtype = mID; 
+		strcpy(bufS.mtext, "terminate"); 
+		msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0); 
+		wait(NULL); 
+		
+		--concProc; 
+		unsetUserIdxBit(idx); 
+		active[idx] = false; 
+        
+		
+		if(debug == true){
+
+            fprintf(stderr, "Master: DEBUG: P%d Requested Invalid Address -> Terminate %s\n", idx, getSysTime());
+        }
+
+		return; 
+	}
 
 
     if( strcmp(bufR.mtext, "Read") == 0){
