@@ -135,18 +135,20 @@ static void sendMessage(){
     int offset = getRand(-10, 1035);
     int address = page*1024 + offset;
     sys->pTable[idx].frameIdx = page;
+	sys->pTable[idx].pageT[page].offset = offset; //getRand(-10, 1045); 
+	sys->pTable[idx].pageT[page].address = address; 
 
     //Randomly Choose Read/Write Based On Read/Write %
     if(getRand(0,100) < readPct){
         // bufS.action = READ;
         sys->pTable[idx].pageT[page].actionNum = READ;
-        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
+        strcpy(sys->pTable[idx].pageT[page].action, "Read");
         strcpy(bufS.mtext, "Read");
     }
     else {
         //bufS.action = WRITE;
         sys->pTable[idx].pageT[page].actionNum = WRITE;
-        strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
+        strcpy(sys->pTable[idx].pageT[page].action, "Write");
         strcpy(bufS.mtext, "Write");
     }
     

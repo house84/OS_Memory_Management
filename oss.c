@@ -238,15 +238,23 @@ static void allocateCPU(){
         return;
     }
 
+
+        int page = sys->pTable[idx].frameIdx;
+        int pageMinAddr = page*1024;             //p0 = Addressable from 0
+        int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
+		int address = sys->pTable[idx].pageT[page].address; 
+		int actionNum = sys->pTable[idx].pageT[page].actionNum; 
+		char msg[200]; 
+		strcpy(msg, sys->pTable[idx].pageT[page].action);  
+
+
     if( strcmp(bufR.mtext, "Read") == 0){
-
-        if(debug == true){
-
-            fprintf(stderr, "Master: DEBUG: P%d Process Read Request Time: %s\n", idx, getSysTime());
-        }
 
         //Handle User Memory Request
         //memoryHandler();
+		if( debug == true){
+			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
+		}
 
         //This is for Testing and will go in Memory Handler
         enqueue(processQ, idx, 0);
@@ -255,16 +263,15 @@ static void allocateCPU(){
     }
 
     if(strcmp(bufR.mtext, "Write") == 0){
-
-        if(debug == true){
-
-            fprintf(stderr, "Master: DEBUG: P%d Process Write Request Time: %s\n", idx, getSysTime());
-        }
-
+		
         //Handle User Memory Request
         //memoryHandler();
 
-        //This is for Testing and will go in Memory Handler
+		 if( debug == true){
+			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
+		 }
+		 
+		//This is for Testing and will go in Memory Handler
         enqueue(processQ, idx, 0);
 
         return;
