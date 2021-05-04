@@ -77,6 +77,7 @@ typedef struct{
     pid_t pid;
     int delimeter;
     int frameIdx;
+	int page; 
     frame pageT[pTableSize];
 } pcb;
 
