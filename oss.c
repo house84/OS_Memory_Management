@@ -324,67 +324,67 @@ static void memoryHandler(int idx, int page, int RW){
     specialDaemon();
 
 
-         //check if frame has been allocated System memory
-         if( sys->pTable[idx].pageT[page].allocated ) {
+    //check if frame has been allocated System memory
+    if( sys->pTable[idx].pageT[page].allocated ) {
 
-             //set valid bit = true,
-             sys->pTable[idx].pageT[page].validBit = true;
+   		//set valid bit = true,
+        sys->pTable[idx].pageT[page].validBit = true;
 
-             //refBit or dirtyBit depending on Read/Write
-             if(RW == READ){
-                 sys->pTable[idx].pageT[page].refByte = true;
-             }
-             else{
-                 sys->pTable[idx].pageT[page].dirtyBit = true;
-             }
+        //refBit or dirtyBit depending on Read/Write
+        if(RW == READ){
+            sys->pTable[idx].pageT[page].refByte = true;
+        }
+        else{
+            sys->pTable[idx].pageT[page].dirtyBit = true;
+        }
 
-             return;
-         }
+        return;
+    }
 
-         //search memory bit vector for space in OSS
-         int memIdx = getMemoryBit();
-         if(memIdx >= 0){
+    //search memory bit vector for space in OSS
+    int memIdx = getMemoryBit();
+    if(memIdx >= 0){
 
-             //Allocate Memory
-             sys->pTable[idx].pageT[page].frameIdx = memIdx;
-         }
-          else{
+        //Allocate Memory 
+		sys->pTable[idx].pageT[page].frameIdx = memIdx;
+    }
+    else{
 
-             //Second Chance Find replacement and allocate
-             memIdx = fifo();
+        //Second Chance Find replacement and allocate
+        memIdx = fifo();
 
-             //Allocate Memory
-             sys->pTable[idx].pageT[page].frameIdx = memIdx;
-          }
+        //Allocate Memory
+        sys->pTable[idx].pageT[page].frameIdx = memIdx;
+     }
 
-          ++allocatedFrames;
+     ++allocatedFrames;
 
-          //set time
-          sys->pTable[idx].pageT[page].time = getTime();
+     //set time
+     sys->pTable[idx].pageT[page].time = getTime();
 
-          //Set allocated = true; in User Frame
-          sys->pTable[idx].pageT[page].allocated = true;
+     //Set allocated = true; in User Frame
+     sys->pTable[idx].pageT[page].allocated = true;
 
-          //Set ValidBit
-          sys->pTable[idx].pageT[page].validBit = true;
+     //Set ValidBit
+     sys->pTable[idx].pageT[page].validBit = true;
 
-          //set faultQRemove to 14ms past current time
-          sys->pTable[idx].pageT[page].faultQRemove = getTime() + .014;
+     //set faultQRemove to 14ms past current time
+     sys->pTable[idx].pageT[page].faultQRemove = getTime() + .014;
 
-          if( RW == READ ){
+     if( RW == READ ){
 
-              sys->pTable[idx].pageT[page].refByte = true;
-          }
-          else {
+         sys->pTable[idx].pageT[page].refByte = true;
+     }
+     else {
 
-              sys->pTable[idx].pageT[page].dirtyBit = true;
-          }
+         sys->pTable[idx].pageT[page].dirtyBit = true;
+     }
 
-          //Add to frameQueue
-          enqueue(frameQ, idx, page);
+     //Add to frameQueue
+     enqueue(frameQ, idx, page);
 
-          //Add to faultQ
-          circleEnqueue(faultQ, idx, page, sys->pTable[idx].pageT[page].faultQRemove);
+     //Add to faultQ
+     circleEnqueue(faultQ, idx, page, sys->pTable[idx].pageT[page].faultQRemove);
 }
 
 
@@ -564,17 +564,16 @@ static void specialDaemon(){
 }
 
 static int fifo(){
-    int index;
+    
+	int index;
 
     //do FIFO stuff
+	
+	return getRand(0,255); 
 
-    return index;
 }
 
 static void checkFaultQ(){
-
-  //for testing
-  return; 
 
   	struct p_Node * newNode;
 
@@ -590,12 +589,11 @@ static void checkFaultQ(){
         char action[100];
         strcpy(action, sys->pTable[idx].pageT[newNode->page].action);
         int addr = sys->pTable[idx].pageT[newNode->page].frameIdx;
+		
+		//Add Process Back into RunQ
+		enqueue(processQ, idx, 0); 
 
         fprintf(stderr, "Master: Indicating P%d that %s has happened at address %d\n", idx, action, addr);
-
-        if(msgsnd( shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1){
-            perrorHandler("Master: ERROR: Failed to Send Message to User ");
-        }
     }
 }
 
