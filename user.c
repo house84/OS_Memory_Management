@@ -99,10 +99,10 @@ static void pageRequest(){
 
     //Choose Random Page from Table to Request
     int page = getRand(0,31); 
-	sys->pTable[idx].pageT[page].offset = getRand(-10, 1035); 
     bufS.page = page; 
 	//~2.4% Chance for bad memory Reference
     int offset = getRand(-10, 1035); 
+	sys->pTable[idx].pageT[page].offset = offset; //getRand(-10, 1045); 
 //	bufS.offset = offset; 
     //Request Address to Access, Chance for Invalid Request
     int address = page*1024 + offset; 
@@ -110,7 +110,7 @@ static void pageRequest(){
 	sys->pTable[idx].pageT[page].address = address; 
 //	bufS.address = -1; 
 
-    sys->pTable[idx].frameIdx = bufS.page;
+    sys->pTable[idx].frameIdx = page;
 
     //Randomly Choose Read/Write Based On Read/Write %
     if(getRand(0,100) < readPct){
@@ -125,11 +125,8 @@ static void pageRequest(){
 		strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
         strcpy(bufS.mtext, "Write Access Request");
     }
-    bufS.mtype = mID;
-
-    if(sys->debug == true){
-        fprintf(stderr, "User: DEBUG: P%d -> %s\n", idx, bufS.mtext);
-    }
+    
+	bufS.mtype = mID;
 
     //if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), IPC_NOWAIT) == -1 ){
     if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
@@ -146,7 +143,7 @@ static void pageRequest(){
 
 	if(sys->debug == true ){
 
-		fprintf(stderr, "User: DEBUG: Address: %d Run: %d Message Received %s\n",sys->pTable[idx].pageT[page].address, run, bufR.mtext);
+		fprintf(stderr, "User: DEBUG: Address: %d Run: %d Message Received %s\n",sys->pTable[idx].pageT[page].address, run, sys->pTable[idx].pageT[page].action);
 	}
 
 }
@@ -154,7 +151,8 @@ static void pageRequest(){
 //Check if User Should Self Terminate
 static bool checkTermPct(){
 
-    //If random Ref between 900-1100 Ref Check for term
+    ++referenceIter;
+	//If random Ref between 900-1100 Ref Check for term
     if(referenceIter % randRef == 0){
 
         int t = getRand(0,2);

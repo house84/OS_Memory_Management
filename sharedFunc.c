@@ -58,6 +58,10 @@ int getRand(int l, int u){
 
         return rand() % (u+1);
     }
+	else if( l < 0 ){
+
+		return ( rand() % (u + 1)+ l);
+	}
 
     return ( rand() % u ) + 1;
 }

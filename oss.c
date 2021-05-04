@@ -204,14 +204,18 @@ static void memoryHandler(){
      if(bufR.mtype != -1){
 
          idx = bufR.mtype - 1;
-         int pageMinAddr = bufR.page*1024;             //p0 = Addressable from 0
-         int pageMaxAddr = ((bufR.page+1)*1024) - 1;   //p0 = Addressable to 1023
-         int page = bufR.page;
+         int page = sys->pTable[idx].pageT[bufR.page].page;
+         int pageMinAddr = page*1024;             //p0 = Addressable from 0
+         int pageMaxAddr = ((page+1)*1024) - 1;   //p0 = Addressable to 1023
+		 int address = sys->pTable[idx].pageT[page].address; 
+		 int actionNum = sys->pTable[idx].pageT[page].actionNum; 
+		 char msg[200]; 
+		 strcpy(msg, bufR.mtext); 
          bool invalid = false;
          bool terminate = false;
 
 		 if( debug == true){
-			 fprintf(stderr, "Master: DEBUG: MemoryHandler() Address: %d P%d  Action: %d Message: %s\n", bufR.address, idx, bufR.action, bufR.mtext); 
+			 fprintf(stderr, "Master: DEBUG: MemoryHandler() Page: %d Address: %d P%d  Action: %d Message: %s\n", page, address, idx, actionNum, msg); 
 		 }
 
          //+++for Testing To Terminate
@@ -219,11 +223,19 @@ static void memoryHandler(){
          //++++++
 
          //Check if Address is invalid, then terminate
+         //if( actionNum ==  TERMINATE ){
          if( strcmp(bufR.mtext, "terminate") == 0){
 
 			fprintf(stderr, "In Terminate\n"); 
 
              invalid = true;
+             
+			 bufS.mtype = bufR.mtype;
+             bufS.action = TERMINATE;
+             strcpy(bufS.mtext, "terminate");
+             if (msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1) {
+                 perrorHandler("Master: ERROR: Failed to Send Message to User ");
+             }
             	
 			 wait(NULL); 
 			 --concProc; 
@@ -231,7 +243,7 @@ static void memoryHandler(){
 			 freeUserResources(idx, page);
              return;
          }
-         else if( bufR.address < pageMinAddr || bufR.address > pageMaxAddr ) {
+         else if( address < pageMinAddr || address > pageMaxAddr ) {
 
              fprintf(stdout, "Master: Address %d is Invalid, Terminating. Time: %s\n", idx, bufS.address, getSysTime());
 
