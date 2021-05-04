@@ -124,6 +124,11 @@ int main(int argc, char * argv[]){
                 }
 
                 enqueue(processQ, idx, 0);
+
+				if(debug == true){
+
+					fprintf(stderr, "Master: Debug: P%d Has been Added to Run Q\n", idx); 
+				}
             }
 
         }
@@ -173,24 +178,34 @@ int main(int argc, char * argv[]){
 //CPU Handler
 static void allocateCPU(){
 
-    //Check for runnable Processes
+    
+	//Check for runnable Processes
     if(processQ->currSize == 0){ return; }
 
     //Dequeue Process
-    CPU_Node = dequeue();
+    CPU_Node = dequeue(processQ);
 
-    //Check Node
+    
+	//Check Node
     if(CPU_Node == NULL){
 
         fprintf(stderr,"Que Head Empty\n");
         return;
     }
 
+
     int idx = CPU_Node->idx;
     int mID = CPU_Node->idx+1;
+	
+	if(debug == true ){
+
+		fprintf(stderr, "Master: DEBUG: P Allocate CPU\n"); 
+	}
+	
 
     bufS.mtype = mID;
     strcpy(bufS.mtext, "Run");
+
 
     if((msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0)) == -1 ){
 
@@ -202,9 +217,15 @@ static void allocateCPU(){
     //Wait for message from User to simulate end CPU
     msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0);
 
+	if(debug == true ){
+
+		fprintf(stderr, "Master: DEBUG: P%d Message Recieved: %s\n", idx, bufR.mtext); 
+	}
+
+
     //Handle User Message
     //Check return
-    if( strcmp(bufR.mtext, "terminated") == 0){
+    if( strcmp(bufR.mtext, "terminate") == 0){
 
         unsetUserIdxBit(idx);
         active[idx] = 0;
@@ -249,6 +270,8 @@ static void allocateCPU(){
         return;
     }
 }
+
+
 //page Handler
 static void memoryHandler(){
 

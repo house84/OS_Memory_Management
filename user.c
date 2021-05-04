@@ -53,12 +53,12 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "User[%d]: DEBUG: Initialized - Time: %s\n", idx, getSysTime());
     }
 
-    bufS.mtype = mID;
-    strcpy(bufS.mtext, "Test: User -> Oss");
-    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
+//    bufS.mtype = mID;
+//    strcpy(bufS.mtext, "Test: User -> Oss");
+//    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
 
-        perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
-    }
+//        perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
+//    }
 
 //    while(run == true){ // && sys->run == true){
 //
@@ -81,14 +81,16 @@ int main(int argc, char * argv[]){
 
     while(run == true){
 
+
         //Recienve Message to Run from CPU
-        msgrcv(shmidMsgRec, &bufS, sizeof(bufR.mtext), mID, 0);
+        msgrcv(shmidMsgRec, &bufR, sizeof(bufR.mtext), mID, 0);
 
+		if( sys->debug == true){
 
-        int cmp = strcmp(bufR.mtext, "terminate");
-        //fprintf(stderr, "User Process %d terminate: %d\n", idx, cmp);
+			fprintf(stderr, "User[%d]: DEBUG %s Message Received\n", idx, bufR.mtext); 
+		}
 
-        if( cmp == 0 ){
+        if( strcmp(bufR.mtext, "terminate") == 0 ){
 
             run = false;
 
@@ -96,11 +98,11 @@ int main(int argc, char * argv[]){
         }
 
         //Send Message Back to OSS
-        sendMessage(shmidMsgRec);
+        sendMessage();
     }
 
     if(sys->debug == true){
-        fprintf(stderr, "User: DEBUG: P%d Terminating Time: %s\n", idx, getSysTime());
+        fprintf(stderr, "User[%d]: DEBUG: Terminating Time: %s\n", idx, getSysTime());
     }
 
     //Free Memory
@@ -111,7 +113,7 @@ int main(int argc, char * argv[]){
 }
 
 //Message Handling
-static void sendMessage(int msgid){
+static void sendMessage(){
 
     bufS.mtype = mID;
 
@@ -127,6 +129,7 @@ static void sendMessage(int msgid){
 
         return;
     }
+	
 
     int page = getRand(0,31);
     int offset = getRand(-10, 1035);
@@ -138,15 +141,24 @@ static void sendMessage(int msgid){
         // bufS.action = READ;
         sys->pTable[idx].pageT[page].actionNum = READ;
         strcpy(sys->pTable[idx].pageT[bufS.page].action, "Read");
-        strcpy(bufS.mtext, "Read Access Request");
+        strcpy(bufS.mtext, "Read");
     }
     else {
         //bufS.action = WRITE;
         sys->pTable[idx].pageT[page].actionNum = WRITE;
         strcpy(sys->pTable[idx].pageT[bufS.page].action, "Write");
-        strcpy(bufS.mtext, "Write Access Request");
+        strcpy(bufS.mtext, "Write");
+    }
+    
+	if(sys->debug == true){
+        fprintf(stderr, "User[%d]: DEBUG: sendMessage()\n", idx);
+    }
+    
+	if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
+        perrorHandler("User: ERROR: Failed to msgsnd() in sendMessage() ");
     }
 }
+
 
 //Generate Memory Request for Read/Write
 static void pageRequest(){
