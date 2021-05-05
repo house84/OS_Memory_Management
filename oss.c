@@ -297,7 +297,6 @@ static void allocateCPU(){
 
         //This is for Testing and will go in Memory Handler
 		memoryHandler(idx, page, READ); 
-        //enqueue(processQ, idx, 0);
 
         return;
     }
@@ -311,9 +310,6 @@ static void allocateCPU(){
         //Handle User Memory Request
         memoryHandler(idx, page, WRITE);
 		
-		//This is for Testing and will go in Memory Handler
-        //enqueue(processQ, idx, 0);
-
         return;
     }
 }
@@ -572,13 +568,61 @@ static void specialDaemon(){
 static int fifo(){
     
 	int index;
+	int QSize = frameQ->currSize; 
+	bool found = false; 
 
-    //do FIFO stuff
+	struct p_Node *newNode = frameQ->head; 
+
+	int i; 
+	for( i = 0; i < QSize; ++i ){ //refByte
+
+		if(newNode == NULL) { break; }
+
+		if(sys->pTable[newNode->idx].pageT[newNode->page].refByte == false){
+                
+				
+			int frameIdx = sys->pTable[newNode->idx].pageT[newNode->page].frameIdx;
+            
+			fprintf(stderr, "Master: P%d Swapping Frame %d\n", newNode->idx, frameIdx);
+
+            //Free allocated Memory used by User
+            unsetMemoryBit(frameIdx);
+
+            //Reset Frames Values to Default
+            sys->pTable[newNode->idx].pageT[newNode->page].allocated = false;
+            sys->pTable[newNode->idx].pageT[newNode->page].refByte = false;
+            sys->pTable[newNode->idx].pageT[newNode->page].validBit = false;
+            if(sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit){
+
+            	//Increment System Time for Dirty Bit Opt Cost
+                semWait(mutex);
+                incrementSysTime(getRand(10000000, 14000000));
+                semSignal(mutex);
+                sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit = false;
+                fprintf(stderr, "Master: \tDirty Bit of frame %d set, time added to system clock\n", frameIdx);
+          	}
+
+            //Remove Frame from Queue
+            removeQ(frameQ, newNode->idx, newNode->page);
+
+			return frameIdx; 
+			
+		}
+        
+		else{
+
+         	sys->pTable[newNode->idx].pageT[newNode->page].refByte = false;
+        }
+            
+		newNode = newNode->next;
+	}
+
 	
-	return getRand(0,255); 
-
+	fifo(); 
 }
 
+
+//Check if I/O Timer is up 
 static void checkFaultQ(){
 
   	struct p_Node * newNode;
