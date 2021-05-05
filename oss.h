@@ -25,6 +25,7 @@ struct CircleQ * faultQ;               //Circle Q to hold faults
 struct p_Node *CPU_Node;               //Node to Hold CPU Process
 int concProc;                          //Number of Concurrent Processes
 int totalProc; 					       //Number of total procedures
+int designatedUsers;                   //User Defined Max Concurrent Processes
 char logfile[50];                      //Logfile Name
 bool active[maxConProc];               //Array holding active Processes by idx
 pid_t pidArray[100];                   //Variable for Process PID's

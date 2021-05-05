@@ -33,8 +33,8 @@ int main(int argc, char * argv[]){
     run = true;
     references = 0;
     randRef = getRand(900, 1100);
-    //Initialize pTable[Frames]
-
+	sys->pTable[idx].pageFaults = 0; 
+	sys->pTable[idx].pageReferences = 0; 
 
     if(sys->debug == true){
         fprintf(stderr, "User[%d]: DEBUG: Initializing - Time: %s\n", idx, getSysTime());
@@ -52,31 +52,6 @@ int main(int argc, char * argv[]){
     if(sys->debug == true){
         fprintf(stderr, "User[%d]: DEBUG: Initialized - Time: %s\n", idx, getSysTime());
     }
-
-//    bufS.mtype = mID;
-//    strcpy(bufS.mtext, "Test: User -> Oss");
-//    if( msgsnd(shmidMsgSend, &bufS, sizeof(bufS.mtext), 0) == -1 ){
-
-//        perrorHandler("User: ERROR: Failed to msgsnd() on initialization ");
-//    }
-
-//    while(run == true){ // && sys->run == true){
-//
-//        //MOVE INTO FUNCTION LISTEN FOR TERMINATE
-//      //  if(checkTermMsg()){ break; }
-//
-//        //Check if User Should Self Terminate
-//        if(checkTermPct()){
-//
-//			if(sys->debug == true){
-//				fprintf(stderr, "User: P%d DEBUG: Check Terminate True \n", idx);
-//			}
-//			run = false;
-//			break;
-//		}
-//
-//        //Request Read/Write
-//        pageRequest();
 
 
     while(run == true && sys->run == true){
@@ -175,12 +150,9 @@ static void pageRequest(){
 	//~2.4% Chance for bad memory Reference
     int offset = getRand(-10, 1035); 
 	sys->pTable[idx].pageT[page].offset = offset; //getRand(-10, 1045); 
-//	bufS.offset = offset; 
     //Request Address to Access, Chance for Invalid Request
     int address = page*1024 + offset; 
-//	bufS.address = address;
 	sys->pTable[idx].pageT[page].address = address; 
-//	bufS.address = -1; 
 
     sys->pTable[idx].frameIdx = page;
 

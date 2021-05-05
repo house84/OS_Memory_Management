@@ -17,11 +17,52 @@ int main(int argc, char * argv[]){
     sigFlag = false;
     spawnFlag = false;
     debug = false;
+    srand(time(NULL));
 
     //Initialize Signal Handling
     signal(SIGINT, signalHandler);
+	designatedUsers = 18; 
 
-    //Initialize Logfile
+
+
+    //Parse Input Args
+    int c = 0;
+    while(( c = getopt(argc, argv, "hdp:")) != -1){
+
+        switch(c){
+            case 'h':	help(argv[0]);
+                exit(EXIT_SUCCESS);
+
+            case 'd': 	//Set Time
+                debug = true;
+                break;
+
+			case 'p':  //Set User Processes
+				designatedUsers = atoi(optarg); 
+				break;
+
+			case ':': 
+				fprintf(stderr, "Argument Required...Exiting\n"); 
+				exit(EXIT_FAILURE);
+				break; 
+
+            default:	//Defalut Failure Exit
+                fprintf(stderr, "Invalid Argument, see usage [-h]\n");
+                exit(EXIT_FAILURE);
+        }
+
+    }
+    
+	
+	
+	if( designatedUsers <= 0 ){
+
+		fprintf(stdout, "\nNumber of Processes Must be greater than 0\nExiting...\n");
+		exit(EXIT_SUCCESS); 
+	}
+
+	if( designatedUsers > 18 ) { designatedUsers = 18; } 
+	
     //Set Initial Parameters
     memset(logfile, '\0', sizeof(logfile));
     strcpy(logfile, "logfile");
@@ -32,38 +73,21 @@ int main(int argc, char * argv[]){
     frameQ = initQueue();
     faultQ = initCircleQ();
 
+
     //Initialize CPU Node
     CPU_Node = (struct p_Node*)malloc(sizeof(struct p_Node));
-
-    srand(time(NULL));
-
-    //Parse Input Args
-    int c = 0;
-    while(( c = getopt(argc, argv, "hd")) != -1){
-
-        switch(c){
-            case 'h':	help(argv[0]);
-                exit(EXIT_SUCCESS);
-
-            case 'd': 	//Set Time
-                debug = true;
-                break;
-
-            default:	//Defalut Failure Exit
-                fprintf(stderr, "Invalid Argument, see usage [-h]\n");
-                exit(EXIT_FAILURE);
-        }
-
-    }
 
     //Open logfile
     openLogfile();
     createSharedMemory();
     sys->debug = debug;
+	sys->stats.memAccess = 0; 
+	sys->stats.faults = 0; 
+	sys->stats.AvgMAS = 0; 
+	sys->stats.segFault = 0; 
 
-
-   // int index;
-    int iterTime;
+	
+	int iterTime;
     concProc = 0;
     sys->run = true;
 
@@ -77,8 +101,6 @@ int main(int argc, char * argv[]){
     bool terminateTimer = false;
 
    	while(true){
-    //int j;
-    //for(j = 0; j < 300; ++j){
 
         //Check Timer
         if(terminateTimer == false){
@@ -103,7 +125,7 @@ int main(int argc, char * argv[]){
         checkFaultQ();
 
 
-        if( concProc < maxConProc ){
+        if( concProc < designatedUsers){ 
 
             //do some spawning
             int idx = getUserIdxBit();
@@ -169,12 +191,13 @@ int main(int argc, char * argv[]){
     if(debug == true){
         fprintf(stderr, "Master: DEBUG: Driver Loop Exited Total Processes: %d  Time: %s\n", totalProc, getSysTime());
     }
-
-
-    //Allow Processes to finish
+	
+    
+	//Allow Processes to finish
     while(wait(NULL) > 0){}
 
-   	//Clean up Resources
+   	
+	//Clean up Resources
     signalHandler(3126);
 
     if(debug == true){
@@ -279,6 +302,10 @@ static void allocateCPU(){
 		--concProc; 
 		unsetUserIdxBit(idx); 
 		active[idx] = false; 
+
+		
+		//Increment SegFault
+		++sys->stats.segFault; 
         
 		
 		if(debug == true){
@@ -289,6 +316,9 @@ static void allocateCPU(){
 		return; 
 	}
 
+
+	//Increment Memory Access
+	++sys->stats.memAccess; 
 
     if( strcmp(bufR.mtext, "Read") == 0){
 
@@ -320,6 +350,7 @@ static void memoryHandler(int idx, int page, int RW){
 
     //Summon the Daemon
     specialDaemon();
+	++sys->pTable[idx].pageReferences; 
 
 
     //check if frame has been allocated System memory
@@ -335,8 +366,11 @@ static void memoryHandler(int idx, int page, int RW){
         else{
             sys->pTable[idx].pageT[page].dirtyBit = true;
         }
-
+		
+		//No Page Fault increment System Time 10 ns
+		incrementSysTime(10); 
 		enqueue(processQ, idx, 0); 
+		sys->stats.AvgMAS += .00000001; 
 
         return;
     }
@@ -350,6 +384,7 @@ static void memoryHandler(int idx, int page, int RW){
     }
     else{
 
+
         //Second Chance Find replacement and allocate
         memIdx = fifo();
 
@@ -358,6 +393,9 @@ static void memoryHandler(int idx, int page, int RW){
      }
 
      ++allocatedFrames;
+	 ++sys->pTable[idx].pageFaults; 
+	 ++sys->stats.faults; 
+	 sys->stats.AvgMAS += .014; 
 
      //set time
      sys->pTable[idx].pageT[page].time = getTime();
@@ -416,6 +454,15 @@ static void freeUserResources(int idx, int page){
         }
     }
     
+	//Print Effective Memory Access
+	if(sys->pTable[idx].pageReferences > 0){
+		float EMA; 
+		float p = sys->pTable[idx].pageFaults/sys->pTable[idx].pageReferences; 
+		EMA = (1 - p) * 10 + p * 14000000; 
+
+		fprintf(stderr, "Master: P%d Effective Memory Access Time: %f ns\n", idx, EMA); 
+	}
+
 	removeQ(frameQ, idx, page);
 
 }
@@ -704,7 +751,19 @@ static void signalHandler(int sig){
         fprintf(stderr, "\nProgram Terminated due to Timer\n");
     }
 
-    //Close Logfile Ptr
+	fprintf(stderr, "\n|||==>     Performance Stats     <==||\n");
+	fprintf(stderr, "Memory Accesses/Second = %f\n", sys->stats.memAccess/getTime()); 
+	fprintf(stderr, "Page Faults/Memory Access = %f\n", sys->stats.faults/sys->stats.memAccess); 
+	fprintf(stderr, "Average Memory Access Speed = %f ns\n", sys->stats.AvgMAS/sys->stats.memAccess); 
+	fprintf(stderr, "Number of Segfaults per Memory Access = %f\n\n", sys->stats.segFault/sys->stats.memAccess); 
+
+	fprintf(logPtr, "\n|||==>     Performance Stats     <==||\n");
+	fprintf(logPtr, "Memory Accesses/Second = %f\n", sys->stats.memAccess/getTime()); 
+	fprintf(logPtr, "Page Faults/Memory Access = %f\n", sys->stats.faults/sys->stats.memAccess); 
+	fprintf(logPtr, "Average Memory Access Speed = %f ns\n", sys->stats.AvgMAS/sys->stats.memAccess); 
+	fprintf(logPtr, "Number of Segfaults per Memory Access = %f\n\n", sys->stats.segFault/sys->stats.memAccess); 
+    
+	//Close Logfile Ptr
     closeLogfile();
 
     //Allow Potential Creating Processes to add PID to Array
@@ -847,7 +906,8 @@ static void help(char *program){
     printf("\n//=== %s Usage Page ===//\n", program);
     printf("\n%s [-h][-v]\n", program);
     printf("%s -h      This Usage Page\n", program);
-    printf("%s -v      Turn Debug Mode On\n", program);
+    printf("%s -d      Turn Debug Mode On\n", program);
+	printf("%s -p  n   This Designates n Number of Concurrent Processes\n\n", program); 
 
 }
 
@@ -892,8 +952,6 @@ static void spawn(int idx){
         //Temp Block Handler from Terminating
         spawnFlag = true;
 
-//		signal(SIGHUP, sighup); 
-
         //Add Process to Process Array
         pidArray[idx]  = process_id;
 
@@ -912,7 +970,6 @@ static void spawn(int idx){
         char buffer_msgId[50];
         sprintf(buffer_msgId, "%d", shmidMsgSend);
 
-        //bool run = true;
         //shmidMsgRcv arg
         char buffer_msgId2[50];
         sprintf(buffer_msgId2, "%d", shmidMsgRec);

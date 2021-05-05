@@ -44,10 +44,10 @@ int shmidSem;
 
 typedef struct{
 
-    int actionNum;               //READ(0) WRITE(1) TERMINATE(2)
-    int page;                 //Index Within Page Table
-    int offset;               //Page Offset
-    int address;              //Address For Read/Write
+    int actionNum;          //READ(0) WRITE(1) TERMINATE(2)
+    int page;               //Index Within Page Table
+    int offset;             //Page Offset
+    int address;            //Address For Read/Write
 
     int frameIdx;           //Frame Idx for System Bit Array
     char action[bufLength]; //Hold Requested Action
@@ -67,15 +67,18 @@ typedef struct{
     pid_t pid;
     int delimeter;
     int frameIdx;
+	int pageFaults;
+	int pageReferences; 
+
     frame pageT[pTableSize];
 } pcb;
 
 typedef struct{
 
-    int memAPS;              //Number of memory accesses per second
-    float faultsPMA;         //Number of page faults per memory access
-    float AvgMAS;            //Average Memory Access Speed
-    int segFPMA;             //Number of Seg Faults Per memory Access
+    int memAccess;          //Number of memory accesses per second
+    float faults;           //Number of page faults per memory access
+    float AvgMAS;           //Average Memory Access Speed
+    int segFault;           //Number of Seg Faults Per memory Access
 } statistics;
 
 struct system{
