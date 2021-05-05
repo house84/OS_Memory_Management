@@ -18,11 +18,6 @@
 #define sysMem 256
 #define sysMemBitIndex sysMem/pTableSize
 
-#define BIT_SET(a, b) ((a) |= (1ULL << (b)))
-#define BIT_CLEAR(a, b) ((a) &= ~(1ULL << (b)))
-#define BIT_FLIP(a, b) ((a) ^= (1ULL << (b)))
-#define BIT_CHECK(a, b) (!!((a) & (1ULL << (b))))
-
 enum sems{mutex};
 enum actions{READ, WRITE, VALID, TERMINATE};
 
