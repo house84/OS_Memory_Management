@@ -104,7 +104,6 @@ int main(int argc, char * argv[]){
 
 
         if( concProc < maxConProc ){
-        //if( concProc < 1 ){
 
             //do some spawning
             int idx = getUserIdxBit();
@@ -144,14 +143,12 @@ int main(int argc, char * argv[]){
         }
 
         //Check if OSS should terminate
-        if((totalProc > maxProc || terminateTimer == true)){ // && concProc == 0 ){
+        if((totalProc == maxProc || terminateTimer == true)){ // && concProc == 0 ){
 
 		   sys->run = false;
            
-		   if(debug == true){
 
-			   fprintf(stderr, "Master: Ending Loop: Total Proc = %d  Timer%d\n", totalProc, terminateTimer); 
-		   }
+			fprintf(stderr, "\n|||==> OSS Completed : Terminating Users : Total Proc = %d <==||\n", totalProc); 
 		   
 		   sleep(1); 
 
@@ -217,7 +214,7 @@ static void allocateCPU(){
 	
 	if(debug == true ){
 
-		fprintf(stderr, "Master: DEBUG: P Allocate CPU\n", idx); 
+		fprintf(stderr, "Master: DEBUG: P%d Allocate CPU\n", idx); 
 	}
 	
 
@@ -252,6 +249,7 @@ static void allocateCPU(){
     if( strcmp(bufR.mtext, "terminate") == 0){
 
 		fprintf(stderr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
+		fprintf(logPtr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
 		
 		freeUserResources(idx, page); 
         
@@ -269,6 +267,7 @@ static void allocateCPU(){
 	if( address < pageMinAddr || address > pageMaxAddr ){
 
 		fprintf(stderr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
+		fprintf(logPtr, "Master: P%d Requested Invalid Address Terminating Time: %s\n", idx, getSysTime()); 
 		
 		freeUserResources(idx, page); 
 
@@ -293,9 +292,8 @@ static void allocateCPU(){
 
     if( strcmp(bufR.mtext, "Read") == 0){
 
-		if( debug == true){
-			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
-		}
+		fprintf(stderr, "Master: P%d Requesting %s of Address: %d at Time: %s\n", idx, msg, address, getSysTime()); 
+		fprintf(logPtr, "Master: P%d Requesting %s of Address: %d at Time: %s\n", idx, msg, address, getSysTime()); 
 
         //This is for Testing and will go in Memory Handler
 		memoryHandler(idx, page, READ); 
@@ -307,9 +305,8 @@ static void allocateCPU(){
     if(strcmp(bufR.mtext, "Write") == 0){
 		
 
-		 if( debug == true){
-			 fprintf(stderr, "Master: DEBUG: P%d Page: %d Address: %d Action: %d Message: %s\n", idx, page, address, actionNum, msg); 
-		 }
+		fprintf(stderr, "Master: P%d Requesting %s of Address: %d at Time: %s\n", idx, msg, address, getSysTime()); 
+		fprintf(logPtr, "Master: P%d Requesting %s of Address: %d at Time: %s\n", idx, msg, address, getSysTime()); 
 		 
         //Handle User Memory Request
         memoryHandler(idx, page, WRITE);
@@ -400,7 +397,7 @@ static void freeUserResources(int idx, int page){
 
     if( debug == true){
 
-		fprintf(stderr, "Master: DEBUG: P%d Freeing Resources\n", idx); 
+		fprintf(stderr, "Master: DEBUG: P%d Freeing Allocate Memory\n", idx); 
 	}
 	
 	int i;
@@ -418,15 +415,13 @@ static void freeUserResources(int idx, int page){
                 incrementSysTime(getRand(10000000, 14000000));
                 semSignal(mutex);
                 fprintf(stderr, "Master: \tDirty Bit of frame %d set, time added to system clock\n", frameIdx);
+                fprintf(logPtr, "Master: \tDirty Bit of frame %d set, time added to system clock\n", frameIdx);
             }
         }
     }
     
 	removeQ(frameQ, idx, page);
 
-    //Remove User from OSS User management
-    //active[idx] = false;
-    //unsetUserIdxBit(idx);
 }
 
 //Find Available Memory Bit
@@ -525,6 +520,7 @@ static void specialDaemon(){
     if( frameQ->currSize >  231){
 
         fprintf(stderr, "Master: Daemon Process Running - Time: %s\n", getSysTime());
+        fprintf(logPtr, "Master: Daemon Process Running - Time: %s\n", getSysTime());
 
         //Set iterations to 5% total Pages Allocated
         int iter = .05 * frameQ->currSize;
@@ -540,6 +536,7 @@ static void specialDaemon(){
 
                 int frameIdx = sys->pTable[newNode->idx].pageT[newNode->page].frameIdx;
                 fprintf(stderr, "Master: Daemon Process is clearing Frame %d\n", frameIdx);
+                fprintf(logPtr, "Master: Daemon Process is clearing Frame %d\n", frameIdx);
 
                 //Free allocated Memory used by User
                 unsetMemoryBit(frameIdx);
@@ -556,6 +553,7 @@ static void specialDaemon(){
                     semSignal(mutex);
                     sys->pTable[newNode->idx].pageT[newNode->page].dirtyBit = false;
                     fprintf(stderr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
+                    fprintf(logPtr, "Master: Dirty Bit of frame %d set, time added to system clock\n", frameIdx);
                 }
 
                 //Remove Frame from Queue

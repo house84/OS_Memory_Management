@@ -92,7 +92,7 @@ void printCircleQ(struct CircleQ * Q){
     int i;
 
     if(checkEmpty(Q)){
-        fprintf(stderr, "Queue: faultQ is Empty\n");
+    //    fprintf(stderr, "Queue: faultQ is Empty\n");
         return;
     }
 
@@ -109,7 +109,7 @@ void printCircleQ(struct CircleQ * Q){
 bool checkTimerIO(struct CircleQ * Q, float time){
 
     if(checkEmpty(Q)){
-        fprintf(stderr, "Queue: faultQ is Empty\n");
+     //   fprintf(stderr, "Queue: faultQ is Empty\n");
         return false;
     }
 
@@ -244,5 +244,5 @@ void removeQ(struct Queue * Q, int idx, int page)
    // printQ(tempQ);
     *Q = *tempQ;
     free(tempQ);
-  // printQ(Q);
+   // printQ(Q);
 }
