@@ -78,7 +78,7 @@ int main(int argc, char * argv[]){
 
    	while(true){
     //int j;
-    //for(j = 0; j < 200; ++j){
+    //for(j = 0; j < 300; ++j){
 
         //Check Timer
         if(terminateTimer == false){
@@ -326,7 +326,7 @@ static void allocateCPU(){
 static void memoryHandler(int idx, int page, int RW){
 
     //Summon the Daemon
-    //specialDaemon();
+    specialDaemon();
 
 
     //check if frame has been allocated System memory

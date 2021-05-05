@@ -242,7 +242,7 @@ void removeQ(struct Queue * Q, int idx, int page)
     }
 
    // printQ(tempQ);
-    Q = tempQ;
+    *Q = *tempQ;
     free(tempQ);
-   // printQ(GQue);
+  // printQ(Q);
 }
